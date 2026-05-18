@@ -4672,8 +4672,8 @@ async function doRegister() {
       errEl.style.display = 'block'; return;
     }
     if (!res.ok || resJson?.error) {
-      const msg = resJson?.error || 'Failed to create user.';
-      errEl.textContent = msg.includes('already') ? 'Username is already taken.' : msg;
+      const msg = resJson?.error || resJson?.message || JSON.stringify(resJson) || 'Failed to create user.';
+      errEl.textContent = msg.includes('already') ? 'Username is already taken.' : `Error: ${msg}`;
       errEl.style.display = 'block'; return;
     }
   } else {
