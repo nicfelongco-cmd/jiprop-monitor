@@ -599,6 +599,7 @@ textarea { resize: vertical; min-height: 60px; }
 /* select option disabled */
 select option:disabled { color: var(--muted); }
 .entry-phone-panel { display: none; }  /* shown only on phone via media query */
+.phone-endorse-section { display: none; } /* shown only on phone via media query */
 .endorse-banner {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   margin: 0 22px 0; padding: 12px 16px; border-radius: 7px;
@@ -1077,6 +1078,7 @@ canvas { width:100% !important; }
   .mobile-tabbar { display: none !important; }
   .entry-phone-bar { display: none !important; }
   .entry-phone-panel { display: none !important; }
+  .phone-endorse-section { display: none !important; }
   .entry-layout { grid-template-columns: 320px 1fr; }
 }
 
@@ -1089,6 +1091,7 @@ canvas { width:100% !important; }
   .notif-wrap  { display: none !important; }
   .entry-phone-bar { display: none !important; }
   .entry-phone-panel { display: none !important; }
+  .phone-endorse-section { display: none !important; }
   .ham-menu    { top: 52px; }
   /* Entry: narrower sidebar but still two-column */
   .entry-layout { grid-template-columns: 220px 1fr; gap: 12px; }
@@ -1154,6 +1157,8 @@ canvas { width:100% !important; }
   .stage-indicator { display: none !important; }
   .entry-phone-panel { display: block; }             /* collapsible panel */
   .entry-phone-panel.collapsed { display: none !important; }
+  .phone-endorse-section { display: block; border-bottom: 1px solid var(--border); }
+  .phone-endorse-section .endorse-banner { margin: 8px 14px; }
 
   /* Form grids → single column */
   .form-grid { grid-template-columns: 1fr !important; }
@@ -1953,6 +1958,7 @@ async function _initAppData() {
   _reversalCache = reversals || [];
 
   // Subscribe to real-time unit changes
+  let _rtListTimer = null;
   _sb.channel('units_rt').on('postgres_changes', { event: '*', schema: 'public', table: 'units' }, payload => {
     const updated = payload.new;
     if (!updated || !updated.id) return;
@@ -1961,7 +1967,9 @@ async function _initAppData() {
     if (idx >= 0) Object.assign(DB[idx], { ...updated, _id: numId });
     else DB.push({ ...updated, _id: numId, _isExtra: updated.seq === null });
     if (document.getElementById('view-dashboard')?.classList.contains('active')) renderDashboard();
-    renderUnitList();
+    // Debounce list re-render to coalesce rapid save-echo events and prevent flicker
+    clearTimeout(_rtListTimer);
+    _rtListTimer = setTimeout(renderUnitList, 400);
   }).subscribe();
 
   // Subscribe to real-time reversal request changes
@@ -3094,9 +3102,9 @@ function renderEntryForm() {
       </button>
     </div>
 
-    <!-- Collapsible panel (phone only): status + endorsement — collapsed by default -->
+    <!-- Collapsible panel (phone only): status only — collapsed by default -->
     <div class="entry-phone-panel collapsed" id="entry-phone-panel">
-      <div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="padding:10px 14px">
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Account Status</div>
         <div class="status-selector">
           <button class="status-btn ${r.sale_status==='unsold'?'active-unsold':''}"   onclick="changeStatus(${r._id},'unsold');updatePhoneStatusLabel('Unsold')">Unsold</button>
@@ -3105,8 +3113,10 @@ function renderEntryForm() {
         </div>
         <button class="btn btn-ghost" style="margin-top:8px;font-size:11px;width:100%" onclick="renderDashboard();switchView('dashboard')">View in Dashboard</button>
       </div>
-      <div class="phone-endorsement-wrap">${renderEndorsedBanner(r)}</div>
     </div>
+
+    <!-- Phone endorsement: always visible on phone, below the toggle panel -->
+    <div class="phone-endorse-section">${renderEndorsedBanner(r)}</div>
 
     <!-- Desktop endorsement + stage (hidden on phone via CSS) -->
     <div class="desktop-endorsement">${renderEndorsedBanner(r)}</div>
