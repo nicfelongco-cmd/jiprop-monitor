@@ -1842,6 +1842,7 @@ async function _initAppData() {
     renderNotificationBell();
   }).subscribe();
 
+  filteredUnits = [...DB];
   renderDashboard();
   renderUnitList();
   updateNavTabs();
@@ -2197,6 +2198,7 @@ function switchView(v) {
   // Scroll to top on view switch (mobile UX)
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (v === 'dashboard') renderDashboard();
+  if (v === 'entry')   { filteredUnits = [...DB]; renderUnitList(); }
   if (v === 'report')    renderReport();
   if (v === 'summary')   renderSummary();
   if (v === 'finance')   renderFinance();
