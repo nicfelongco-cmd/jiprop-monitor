@@ -3305,10 +3305,17 @@ function changeStatus(id, newStatus) {
   const r = DB.find(u => u._id === id);
   if (!r) return;
   r.sale_status = newStatus;
-  persistState();
   renderUnitList();
   renderEntryForm();
   renderDashboard();
+  // Targeted single-row update so a full-upsert batch can't clobber the change
+  _sb.from('units').update({
+    sale_status: newStatus,
+    updated_at: new Date().toISOString(),
+    updated_by: _currentUser.username || '',
+  }).eq('id', String(r.id)).then(({ error }) => {
+    if (error) console.error('Status save failed:', error);
+  });
 }
 
 function renderAddForm() {
