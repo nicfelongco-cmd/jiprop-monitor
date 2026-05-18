@@ -4650,14 +4650,26 @@ async function doRegister() {
   const role = _registerAdminMode ? (document.getElementById('reg-role').value || 'viewer') : 'viewer';
 
   if (_registerAdminMode) {
-    // Use Edge Function — creates user without triggering any emails
+    // Call Edge Function directly via fetch
     const { data: { session } } = await _sb.auth.getSession();
-    const { data, error } = await _sb.functions.invoke('create-user', {
-      body: { username, password, role },
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (error || data?.error) {
-      const msg = data?.error || error?.message || 'Failed to create user.';
+    let res, resJson;
+    try {
+      res = await fetch(`${SUPABASE_URL}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ username, password, role }),
+      });
+      resJson = await res.json();
+    } catch(e) {
+      errEl.textContent = 'Could not reach server. Check your connection.';
+      errEl.style.display = 'block'; return;
+    }
+    if (!res.ok || resJson?.error) {
+      const msg = resJson?.error || 'Failed to create user.';
       errEl.textContent = msg.includes('already') ? 'Username is already taken.' : msg;
       errEl.style.display = 'block'; return;
     }
