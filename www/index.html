@@ -1101,7 +1101,7 @@ canvas { width:100% !important; }
   /* Spacing — add bottom padding for tab bar + safe area */
   .view {
     padding: 14px;
-    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
 
   /* Nav: compact, hide top tabs, push profile to far right */
@@ -1124,7 +1124,7 @@ canvas { width:100% !important; }
   /* Entry: full-height single-column, toggled by .unit-open */
   .entry-layout {
     grid-template-columns: 1fr;
-    height: calc(100dvh - 48px - 64px - env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - 48px - env(safe-area-inset-bottom, 0px));
     gap: 0;
   }
   .entry-layout:not(.unit-open) .entry-main { display: none !important; }
@@ -1270,8 +1270,9 @@ canvas { width:100% !important; }
 }
 .mobile-tab .mtab-icon { width: 22px; height: 22px; flex-shrink: 0; }
 .mobile-tab.active { color: var(--accent2); }
+/* Mobile tabbar removed — hamburger handles all navigation on phone */
 @media (max-width: 767px) {
-  .mobile-tabbar { display: flex; }
+  .mobile-tabbar { display: none !important; }
 }
 </style>
 </head>
@@ -4749,9 +4750,9 @@ function applyResponsiveLayout() {
   const notifWrap = document.getElementById('notif-wrap');
   if (notifWrap) notifWrap.style.display = (!isPhone && !isTablet) ? '' : 'none';
 
-  // Bottom tab bar: phone only
+  // Bottom tab bar: always hidden — hamburger handles navigation on all devices
   const tabbar = document.getElementById('mobile-tabbar');
-  if (tabbar) tabbar.style.display = isPhone ? '' : 'none';
+  if (tabbar) tabbar.style.display = 'none';
 
   // Entry layout: remove .unit-open when widening to tablet/desktop
   if (!isPhone) {
