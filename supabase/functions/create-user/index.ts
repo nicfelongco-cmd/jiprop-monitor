@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
       return json({ error: 'Forbidden: insufficient role' }, 403);
     }
 
-    const { username, password, role } = await req.json();
+    const { username, password, role, assignedFi } = await req.json();
     if (!username || !password) return json({ error: 'Username and password required' }, 400);
 
     // Create user via admin API — no email sent
@@ -46,6 +46,7 @@ Deno.serve(async (req) => {
       user_id: created.user.id,
       username,
       role: role || 'viewer',
+      assigned_fi: assignedFi || '',
       status: 'active',
     });
     if (profileErr) return json({ error: profileErr.message }, 400);

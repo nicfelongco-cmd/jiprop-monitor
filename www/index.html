@@ -1264,8 +1264,15 @@ canvas { width:100% !important; }
     </div>
     <div class="login-field">
       <label>Password</label>
-      <input type="password" id="login-password" placeholder="Enter your password"
-             autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      <div style="position:relative">
+        <input type="password" id="login-password" placeholder="Enter your password"
+               autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"
+               style="padding-right:38px;width:100%;box-sizing:border-box">
+        <button type="button" onclick="togglePw('login-password',this)" tabindex="-1"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;color:#bbb;line-height:1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
     </div>
 
     <div class="login-extras">
@@ -1300,21 +1307,41 @@ canvas { width:100% !important; }
     </div>
     <div class="login-field">
       <label>Password</label>
-      <input type="password" id="reg-password" placeholder="At least 6 characters">
+      <div style="position:relative">
+        <input type="password" id="reg-password" placeholder="At least 6 characters"
+               style="padding-right:38px;width:100%;box-sizing:border-box">
+        <button type="button" onclick="togglePw('reg-password',this)" tabindex="-1"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;color:#bbb;line-height:1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
     </div>
     <div class="login-field">
       <label>Confirm Password</label>
-      <input type="password" id="reg-confirm" placeholder="Repeat your password"
-             onkeydown="if(event.key==='Enter')doRegister()">
+      <div style="position:relative">
+        <input type="password" id="reg-confirm" placeholder="Repeat your password"
+               onkeydown="if(event.key==='Enter')doRegister()"
+               style="padding-right:38px;width:100%;box-sizing:border-box">
+        <button type="button" onclick="togglePw('reg-confirm',this)" tabindex="-1"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;color:#bbb;line-height:1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
     </div>
     <div class="login-field" id="reg-role-field" style="display:none">
       <label>Role</label>
-      <select id="reg-role" style="width:100%;padding:10px 12px;border:1.5px solid #e4e4e8;border-radius:6px;font-size:13px;font-family:var(--font);outline:none;background:#fff">
+      <select id="reg-role" onchange="toggleRegFiField()" style="width:100%;padding:10px 12px;border:1.5px solid #e4e4e8;border-radius:6px;font-size:13px;font-family:var(--font);outline:none;background:#fff">
         <option value="viewer">Viewer</option>
         <option value="user">User</option>
         <option value="client_admin">Client Admin</option>
         <option value="sp_admin">SP Admin</option>
         <option value="super_admin">Super Admin</option>
+      </select>
+    </div>
+    <div class="login-field" id="reg-fi-field" style="display:none">
+      <label>Assigned Financial Institution</label>
+      <select id="reg-fi" style="width:100%;padding:10px 12px;border:1.5px solid #e4e4e8;border-radius:6px;font-size:13px;font-family:var(--font);outline:none;background:#fff">
+        <option value="">— None —</option>
       </select>
     </div>
     <div id="reg-error"   style="display:none" class="login-error-msg"></div>
@@ -4626,16 +4653,38 @@ async function doLogout() {
 
 let _registerAdminMode = false;
 
+function togglePw(id, btn) {
+  const inp = document.getElementById(id);
+  if (!inp) return;
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.querySelector('svg').style.opacity = show ? '1' : '0.4';
+}
+
+function toggleRegFiField() {
+  const role = document.getElementById('reg-role')?.value;
+  const fiField = document.getElementById('reg-fi-field');
+  if (fiField) fiField.style.display = ['viewer','user'].includes(role) ? '' : 'none';
+}
+
 function openRegister(adminMode = false) {
   _registerAdminMode = adminMode;
   ['reg-username','reg-password','reg-confirm'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('reg-error').style.display   = 'none';
   document.getElementById('reg-success').style.display = 'none';
   document.getElementById('reg-role-field').style.display  = adminMode ? '' : 'none';
+  document.getElementById('reg-fi-field').style.display    = 'none';
   document.getElementById('reg-footer-signin').style.display = adminMode ? 'none' : '';
   document.getElementById('reg-title').textContent    = adminMode ? 'Create New User' : 'Create Account';
   document.getElementById('reg-subtitle').textContent = adminMode ? 'New account will be active immediately.' : 'Register to access J Tower Title & Tax Declaration Monitor';
-  if (adminMode) document.getElementById('reg-role').value = 'user';
+  if (adminMode) {
+    document.getElementById('reg-role').value = 'user';
+    // Populate FI dropdown
+    const fiSel = document.getElementById('reg-fi');
+    const opts = getFiOptions();
+    fiSel.innerHTML = '<option value="">— None —</option>' + opts.map(f => `<option value="${f}">${f}</option>`).join('');
+    toggleRegFiField();
+  }
   document.getElementById('register-modal').classList.add('open');
 }
 function closeRegister() { document.getElementById('register-modal').classList.remove('open'); }
@@ -4665,7 +4714,7 @@ async function doRegister() {
           'Authorization': `Bearer ${session.access_token}`,
           'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ username, password, role }),
+        body: JSON.stringify({ username, password, role, assignedFi: ['viewer','user'].includes(role) ? (document.getElementById('reg-fi')?.value || '') : '' }),
       });
       resJson = await res.json();
     } catch(e) {
@@ -4926,6 +4975,7 @@ async function renderAdminPanel() {
     const rd  = getRoleDisplay(p.role);
     const roleOpts = assignableRoles.map(r => `<option value="${r.value}" ${p.role === r.value ? 'selected' : ''}>${r.label}</option>`).join('');
     const fiOpts   = ['', ...fiOptions].map(f => `<option value="${f}" ${(p.assigned_fi||'') === f ? 'selected' : ''}>${f || '— None —'}</option>`).join('');
+    const showFi   = ['viewer','user'].includes(p.role);
     const restrictBtn = p.status === 'restricted'
       ? `<button class="admin-restore-btn"  onclick="restoreUser('${p.username}')">Restore</button>`
       : `<button class="admin-restrict-btn" onclick="restrictUser('${p.username}')">Restrict</button>`;
@@ -4935,7 +4985,7 @@ async function renderAdminPanel() {
       <td>${p.display_name || '—'}</td><td>${p.email || '—'}</td>
       <td><span class="role-badge" style="background:${rd.bg};color:${rd.color}">${rd.label}</span></td>
       <td><select class="admin-role-select" onchange="changeUserRole('${p.username}',this.value)">${roleOpts}</select></td>
-      <td><select class="admin-fi-select"   onchange="changeUserFi('${p.username}',this.value)">${fiOpts}</select></td>
+      <td>${showFi ? `<select class="admin-fi-select" onchange="changeUserFi('${p.username}',this.value)">${fiOpts}</select>` : '<span style="font-size:11px;color:var(--muted)">—</span>'}</td>
       <td><span class="user-status-chip ${p.status==='restricted'?'status-restricted':'status-active'}">${p.status}</span></td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">${restrictBtn}${!isMe ? `<button class="admin-delete-btn" onclick="deleteUser('${p.username}')">Delete</button>` : ''}</td>
     </tr>`;
