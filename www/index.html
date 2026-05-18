@@ -1057,12 +1057,43 @@ canvas { width:100% !important; }
   #login-page .login-card { box-shadow: 0 4px 48px rgba(0,0,0,0.12); }
 }
 
-/* ── Tablet (768px – 1199px) ── */
-@media (max-width: 1199px) {
-  .entry-layout { grid-template-columns: 240px 1fr; }
+/* ══════════════════════════════════════════════
+   RESPONSIVE BREAKPOINTS
+   Phone    : < 768px
+   Tablet   : 768px – 1023px
+   Desktop  : ≥ 1024px
+══════════════════════════════════════════════ */
+
+/* ── Desktop only (≥ 1024px) ── */
+@media (min-width: 1024px) {
+  .ham-btn     { display: none !important; }
+  .ham-menu    { display: none !important; }
+  .ham-backdrop{ display: none !important; }
+  .mobile-tabbar { display: none !important; }
+  .entry-layout { grid-template-columns: 320px 1fr; }
+}
+
+/* ── Tablet (768px – 1023px) ── */
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Nav: logo + hamburger, no inline tabs */
+  .nav-tabs    { display: none !important; }
+  .ham-btn     { display: flex !important; }
+  .admin-btn   { display: none !important; }
+  .notif-wrap  { display: none !important; }
+  .ham-menu    { top: 52px; }
+  /* Entry: narrower sidebar but still two-column */
+  .entry-layout { grid-template-columns: 220px 1fr; gap: 12px; }
+  /* Dashboard */
   .dist-row { grid-template-columns: 1fr; }
   .progress-section { grid-template-columns: 1fr; }
-  .stats-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .stats-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  /* Admin modal: centered, not full-width */
+  .admin-overlay { align-items: center !important; padding: 20px !important; }
+  .admin-modal { width: min(860px, 94vw) !important; border-radius: 12px !important; max-height: 88vh !important; }
+  /* Finance KPI */
+  .finance-kpi-row { flex-wrap: wrap; }
+  /* Tables */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
 /* ── Mobile phone (< 768px) ── */
@@ -1171,20 +1202,13 @@ canvas { width:100% !important; }
 }
 .ham-notif-badge.has-items { display: flex; }
 
-/* Show hamburger on phones (< 768px) — same threshold as the bottom tab bar */
+/* ── Phone hamburger + hide inline nav items ── */
 @media (max-width: 767px) {
   .admin-btn { display: none !important; }
   .notif-wrap { display: none !important; }
   .ham-btn { display: flex; }
   .ham-menu { top: 48px; }
   .notif-panel { top: 54px; right: 10px; width: min(360px, calc(100vw - 20px)); }
-}
-
-/* Hide hamburger elements on tablet and above */
-@media (min-width: 768px) {
-  .ham-btn { display: none !important; }
-  .ham-menu { display: none !important; }
-  .ham-backdrop { display: none !important; }
 }
 
 /* ══════════════════════════════════════════════
@@ -4647,6 +4671,14 @@ async function handleProfilePhotoUpload(input) {
 document.addEventListener('click', e => {
   const wrap = document.getElementById('nav-profile-wrap');
   if (wrap && !wrap.contains(e.target)) closeProfilePanel();
+});
+
+// On resize to tablet/desktop: remove mobile slide state from entry layout
+window.addEventListener('resize', () => {
+  if (window.innerWidth >= 768) {
+    const layout = document.querySelector('.entry-layout');
+    if (layout) layout.classList.remove('unit-open');
+  }
 });
 
 // ============================================================
