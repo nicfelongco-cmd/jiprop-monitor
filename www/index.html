@@ -598,6 +598,7 @@ textarea { resize: vertical; min-height: 60px; }
 .fi-manage-link { font-size: 10px; color: var(--accent2); cursor: pointer; text-decoration: underline; margin-left: 6px; font-weight: 600; }
 /* select option disabled */
 select option:disabled { color: var(--muted); }
+.entry-phone-panel { display: none; }  /* shown only on phone via media query */
 .endorse-banner {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   margin: 0 22px 0; padding: 12px 16px; border-radius: 7px;
@@ -687,6 +688,10 @@ select option:disabled { color: var(--muted); }
 .empty-state { text-align: center; padding: 40px; color: var(--muted); }
 
 /* REPORT STYLES */
+.rpt-controls {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+}
+.rpt-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .rpt-shell {
   background: #fff; color: #111; border-radius: 6px;
   padding: 36px 40px; max-width: 960px; margin: 0 auto;
@@ -1070,6 +1075,8 @@ canvas { width:100% !important; }
   .ham-menu    { display: none !important; }
   .ham-backdrop{ display: none !important; }
   .mobile-tabbar { display: none !important; }
+  .entry-phone-bar { display: none !important; }
+  .entry-phone-panel { display: none !important; }
   .entry-layout { grid-template-columns: 320px 1fr; }
 }
 
@@ -1080,6 +1087,8 @@ canvas { width:100% !important; }
   .ham-btn     { display: flex !important; }
   .admin-btn   { display: none !important; }
   .notif-wrap  { display: none !important; }
+  .entry-phone-bar { display: none !important; }
+  .entry-phone-panel { display: none !important; }
   .ham-menu    { top: 52px; }
   /* Entry: narrower sidebar but still two-column */
   .entry-layout { grid-template-columns: 220px 1fr; gap: 12px; }
@@ -1094,6 +1103,8 @@ canvas { width:100% !important; }
   .finance-kpi-row { flex-wrap: wrap; }
   /* Tables */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Report */
+  .rpt-shell { padding: 24px 28px !important; }
 }
 
 /* ── Mobile phone (< 768px) ── */
@@ -1139,7 +1150,7 @@ canvas { width:100% !important; }
   }
   .entry-top-actions { display: none !important; }   /* hides status+dashboard row */
   .entry-phone-bar { display: flex !important; }     /* shows compact toggle row */
-  .endorse-banner { display: none !important; }
+  .desktop-endorsement { display: none !important; }
   .stage-indicator { display: none !important; }
   .entry-phone-panel { display: block; }             /* collapsible panel */
   .entry-phone-panel.collapsed { display: none !important; }
@@ -1162,8 +1173,21 @@ canvas { width:100% !important; }
   /* Finance KPI row: stack */
   .finance-kpi-row { flex-direction: column; gap: 8px; }
 
-  /* Report header: stack */
-  .dash-header .btn { font-size: 12px; padding: 6px 10px; }
+  /* Report controls — override the generic last-child hide, stack vertically */
+  #view-report .dash-header { flex-direction: column; align-items: stretch; }
+  #view-report .dash-header .rpt-controls {
+    display: flex !important; flex-direction: column; width: 100%; gap: 8px;
+  }
+  #view-report .dash-header .rpt-controls .filter-select { width: 100%; }
+  #view-report .dash-header .rpt-controls .btn { width: 100%; box-sizing: border-box; text-align: center; justify-content: center; }
+  /* Report shell: compact padding, brand row stacks */
+  .rpt-shell { padding: 14px 12px !important; }
+  .rpt-brand { flex-direction: column; gap: 2px; }
+  .rpt-title { font-size: 15px !important; }
+  .rpt-subtitle { font-size: 11px !important; }
+  .rpt-kpi-row { flex-direction: column; }
+  .rpt-kpi { min-width: unset !important; }
+  .rpt-chart-wrap { height: 220px !important; }
 
   /* Mobile back button (shown on mobile, invisible on desktop) */
   .mobile-back-btn { display: inline-flex !important; }
@@ -1595,7 +1619,7 @@ canvas { width:100% !important; }
       <h1>Reporting</h1>
       <p>Generate printable reports matching your client deliverables</p>
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <div class="rpt-controls">
       <select id="rpt-view" class="filter-select" onchange="renderReport()">
         <option value="tally">Account Tally</option>
         <option value="monthly_table">Monthly Release — Table</option>
@@ -2188,12 +2212,14 @@ function _toCloudRecord(r) {
   return rec;
 }
 
-let _persistTimer = null;
-function persistState() {
-  clearTimeout(_persistTimer);
-  _persistTimer = setTimeout(async () => {
-    const records = DB.map(_toCloudRecord);
-    const { error } = await _sb.from('units').upsert(records, { onConflict: 'id' });
+const _persistTimers = {};
+function persistState(id) {
+  clearTimeout(_persistTimers[id]);
+  _persistTimers[id] = setTimeout(async () => {
+    delete _persistTimers[id];
+    const r = DB.find(u => u._id === id);
+    if (!r) return;
+    const { error } = await _sb.from('units').upsert([_toCloudRecord(r)], { onConflict: 'id' });
     if (error) console.error('Auto-save failed:', error);
   }, 600);
 }
@@ -2647,7 +2673,7 @@ async function refreshDocSlot(unitId, docType) {
     if (r) {
       if (!r.ecar_checklist) r.ecar_checklist = {};
       r.ecar_checklist[docType] = hasFiles;
-      persistState();
+      persistState(unitId);
       // Refresh progress bar
       const done  = ECAR_CHECKLIST_ITEMS.filter(i => r.ecar_checklist[i.key]).length;
       const total = ECAR_CHECKLIST_ITEMS.length;
@@ -2666,7 +2692,7 @@ async function refreshDocSlot(unitId, docType) {
     const r = DB.find(u => u._id === unitId);
     if (r) {
       r._doas_uploaded = files.length > 0;
-      persistState();
+      persistState(unitId);
     }
   }
 }
@@ -2776,7 +2802,7 @@ function toggleEcarItem(unitId, itemKey, checked) {
   if (!r) return;
   if (!r.ecar_checklist) r.ecar_checklist = {};
   r.ecar_checklist[itemKey] = checked;
-  persistState();
+  persistState(unitId);
   // Update row styling
   const tr = document.getElementById(`ecar-tr-${unitId}-${itemKey}`);
   if (tr) tr.classList.toggle('ecar-row-done', checked);
@@ -2867,7 +2893,7 @@ function saveSectionFields(sectionId, unitId, btn) {
     }
   });
 
-  persistState();
+  persistState(unitId);
   renderUnitList();
   updateStageIndicator();
   const orig = btn.textContent;
@@ -3006,7 +3032,7 @@ function toggleEndorsement(unitId) {
   if (!r) return;
   const today = new Date().toISOString().split('T')[0];
   r.sp_endorsed_date = today;
-  persistState();
+  persistState(unitId);
   renderEntryForm();
   renderUnitList();
 }
@@ -3016,7 +3042,7 @@ function saveEndorseDate(unitId, value) {
   const r = DB.find(u => u._id === unitId);
   if (!r) return;
   r.sp_endorsed_date = value;
-  persistState();
+  persistState(unitId);
   updateStageIndicator();
   renderUnitList();
 }
@@ -3027,7 +3053,7 @@ function unendorseAccount(unitId) {
   const r = DB.find(u => u._id === unitId);
   if (!r) return;
   r.sp_endorsed_date = '';
-  persistState();
+  persistState(unitId);
   renderEntryForm();
   renderUnitList();
 }
@@ -3083,7 +3109,7 @@ function renderEntryForm() {
     </div>
 
     <!-- Desktop endorsement + stage (hidden on phone via CSS) -->
-    ${renderEndorsedBanner(r)}
+    <div class="desktop-endorsement">${renderEndorsedBanner(r)}</div>
     <div class="stage-indicator">
       ${renderStageIndicatorHTML(r)}
     </div>
@@ -3402,7 +3428,7 @@ function saveUnit(id) {
     const el = document.getElementById('f_' + k);
     if (el) r[k] = el.value;
   });
-  persistState();
+  persistState(id);
   const fb = document.getElementById('save-feedback');
   fb.classList.add('show');
   setTimeout(() => fb.classList.remove('show'), 2500);
@@ -3524,7 +3550,7 @@ function addNewUnit() {
 
   newUnit._id = DB.length;
   DB.push(newUnit);
-  persistState();
+  persistState(newUnit._id);
   selectedId = newUnit._id;
   filterUnits();
   renderEntryForm();
@@ -3696,7 +3722,7 @@ function buildTallyReport(accounts, cutoff, years, fiFilter) {
     ? `Filtered by financial institution: ${fiLabel} · For-Transfer accounts only`
     : 'All for-transfer accounts, distributed by pipeline stage and year of full payment (Date of Full Payment field)';
 
-  const table = `<table class="tally-table">
+  const table = `<div class="rpt-table-wrap"><table class="tally-table">
     <thead>
       <tr>
         <th>Pipeline Stage</th>
@@ -3711,7 +3737,7 @@ function buildTallyReport(accounts, cutoff, years, fiFilter) {
         <td>${grandTotal}</td>
       </tr>
     </tfoot>
-  </table>
+  </table></div>
   <div style="margin-top:10px;font-size:10px;color:#888">
     Year columns are based on the Date of Full Payment field per account.
     Accounts without a recorded payment date appear under "No Date".
@@ -3760,11 +3786,11 @@ function buildMonthlyReleaseTable(accounts, cutoff, years, fiFilter) {
 
     return `<div class="release-section">
       <div class="release-section-title">${d.label}${d.note ? `<span class="release-note">${d.note}</span>` : ''}</div>
-      <table class="tally-table">
+      <div class="rpt-table-wrap"><table class="tally-table">
         <thead><tr><th>Month</th>${headCols}</tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr><td>Total</td>${totalCells}<td>${grandTotal}</td></tr></tfoot>
-      </table>
+      </table></div>
       ${grandTotal === 0 ? `<p style="font-size:11px;color:#aaa;margin:6px 0 0">No data recorded for this deliverable in the selected scope.</p>` : ''}
     </div>`;
   }).join('');
@@ -5017,7 +5043,7 @@ function approveReversal(reqId) {
   if (!req) return;
   const numId = isNaN(req.unit_id) ? req.unit_id : Number(req.unit_id);
   const record = DB.find(u => u._id === numId);
-  if (record) { record[req.field_key] = req.new_value; persistState(); }
+  if (record) { record[req.field_key] = req.new_value; persistState(numId); }
   req.status = 'approved';
   _sb.from('reversal_requests').update({ status: 'approved' }).eq('id', reqId).catch(console.error);
   renderNotifPanelBody(); renderNotificationBell();
