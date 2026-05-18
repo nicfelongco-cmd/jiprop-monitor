@@ -1314,6 +1314,7 @@ canvas { width:100% !important; }
         <option value="user">User</option>
         <option value="client_admin">Client Admin</option>
         <option value="sp_admin">SP Admin</option>
+        <option value="super_admin">Super Admin</option>
       </select>
     </div>
     <div id="reg-error"   style="display:none" class="login-error-msg"></div>
@@ -4919,6 +4920,7 @@ async function renderAdminPanel() {
   const assignableRoles = [
     { value: 'viewer', label: 'Viewer' }, { value: 'user', label: 'User' },
     { value: 'client_admin', label: 'Client Admin' }, { value: 'sp_admin', label: 'SP Admin' },
+    { value: 'super_admin', label: 'Super Admin' },
   ];
   const rows = (profiles || []).map(p => {
     const rd  = getRoleDisplay(p.role);
