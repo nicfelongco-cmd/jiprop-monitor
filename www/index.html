@@ -1289,7 +1289,10 @@ canvas { width:100% !important; }
 ════════════════════════════════════════════════════════════ -->
 <div id="register-modal">
   <div class="register-card">
-    <h3 id="reg-title">Create Account</h3>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <h3 id="reg-title" style="margin:0">Create Account</h3>
+      <button onclick="closeRegister()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#999;line-height:1;padding:2px 6px" title="Close">&times;</button>
+    </div>
     <p class="reg-sub" id="reg-subtitle">Register to access J Tower Title &amp; Tax Declaration Monitor</p>
     <div class="login-field">
       <label>Username</label>
