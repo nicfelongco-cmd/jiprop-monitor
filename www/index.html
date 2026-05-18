@@ -123,7 +123,7 @@ nav {
 }
 .admin-overlay.open { display: flex; }
 .admin-modal {
-  background: var(--surface); border-radius: 12px; width: 860px; max-width: 96vw;
+  background: var(--surface); border-radius: 12px; width: 980px; max-width: 96vw;
   max-height: 88vh; display: flex; flex-direction: column;
   box-shadow: 0 16px 48px rgba(0,0,0,0.2);
 }
@@ -5045,28 +5045,34 @@ async function renderAdminPanel() {
       ? `<button class="admin-restore-btn"  onclick="restoreUser('${p.username}')">Restore</button>`
       : `<button class="admin-restrict-btn" onclick="restrictUser('${p.username}')">Restrict</button>`;
     const isMe = p.username === _currentUser.username;
-    const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.display_name || '—';
+    const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.display_name || '';
     const lastLoginStr = p.last_login
-      ? new Date(p.last_login).toLocaleString('en-PH', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+      ? new Date(p.last_login).toLocaleString('en-PH', { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' })
       : 'Never';
-    const lastLoginCol = isSuperAdmin ? `<td style="font-size:11px;color:var(--muted);white-space:nowrap">${lastLoginStr}</td>` : '';
     const editBtn = isSuperAdmin ? `<button class="admin-edit-btn" onclick="openEditUserModal('${p.username}')">Edit</button>` : '';
+    // User cell: username + name + email stacked
+    const userCell = `<td>
+      <div style="font-weight:600;font-size:12px">${p.username}${isMe ? ' <span style="font-size:9px;font-weight:400;color:var(--muted)">(you)</span>' : ''}</div>
+      ${fullName ? `<div style="font-size:11px;color:var(--muted)">${fullName}</div>` : ''}
+      ${p.email   ? `<div style="font-size:10px;color:var(--muted)">${p.email}</div>` : ''}
+    </td>`;
+    // Status cell: chip + last login stacked (super_admin only gets last login)
+    const statusCell = `<td>
+      <span class="user-status-chip ${p.status==='restricted'?'status-restricted':'status-active'}">${p.status}</span>
+      ${isSuperAdmin ? `<div style="font-size:10px;color:var(--muted);margin-top:4px;white-space:nowrap">${lastLoginStr}</div>` : ''}
+    </td>`;
     return `<tr>
-      <td>${p.username}${isMe ? ' <span style="font-size:9px;color:var(--muted)">(you)</span>' : ''}</td>
-      <td>${fullName}</td><td style="font-size:11px">${p.email || '—'}</td>
-      <td><span class="role-badge" style="background:${rd.bg};color:${rd.color}">${rd.label}</span></td>
+      ${userCell}
       <td><select class="admin-role-select" onchange="changeUserRole('${p.username}',this.value)">${roleOpts}</select></td>
       <td>${showFi ? `<select class="admin-fi-select" onchange="changeUserFi('${p.username}',this.value)">${fiOpts}</select>` : '<span style="font-size:11px;color:var(--muted)">—</span>'}</td>
-      <td><span class="user-status-chip ${p.status==='restricted'?'status-restricted':'status-active'}">${p.status}</span></td>
-      ${lastLoginCol}
+      ${statusCell}
       <td style="display:flex;gap:4px;flex-wrap:wrap">${editBtn}${restrictBtn}${!isMe ? `<button class="admin-delete-btn" onclick="deleteUser('${p.username}')">Delete</button>` : ''}</td>
     </tr>`;
   }).join('');
-  const lastLoginHeader = isSuperAdmin ? '<th>Last Login</th>' : '';
-  body.innerHTML = `<table class="admin-user-table"><thead><tr>
-    <th>Username</th><th>Name</th><th>Email</th><th>Role</th>
-    <th>Change Role</th><th>Assigned FI</th><th>Status</th>${lastLoginHeader}<th>Actions</th>
-  </tr></thead><tbody>${rows}</tbody></table>`;
+  const statusHeader = isSuperAdmin ? 'Status / Last Login' : 'Status';
+  body.innerHTML = `<div style="overflow-x:auto"><table class="admin-user-table"><thead><tr>
+    <th>User</th><th>Role</th><th>Assigned FI</th><th>${statusHeader}</th><th>Actions</th>
+  </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 let _editUserTarget = null;
