@@ -4718,7 +4718,7 @@ async function doRegister() {
       });
       resJson = await res.json();
     } catch(e) {
-      errEl.textContent = 'Could not reach server. Check your connection.';
+      errEl.textContent = 'Network error: ' + String(e);
       errEl.style.display = 'block'; return;
     }
     if (!res.ok || resJson?.error) {
