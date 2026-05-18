@@ -1,0 +1,22 @@
+{
+  "name": "jiprop-title-monitor",
+  "version": "1.0.0",
+  "description": "J Tower Title Conversion Monitor — JIPROP Development Corp",
+  "scripts": {
+    "start": "npx serve www -p 3000",
+    "cap:sync": "npx cap sync",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android",
+    "cap:run:ios": "npx cap run ios",
+    "cap:run:android": "npx cap run android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/ios": "^6.2.0",
+    "@capacitor/android": "^6.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0",
+    "serve": "^14.2.3"
+  }
+}
