@@ -45,11 +45,21 @@ create table if not exists public.user_profiles (
   username text unique not null,
   role text not null default 'viewer',
   display_name text default '',
+  first_name text default '',
+  last_name text default '',
   email text default '',
+  contact text default '',
   photo_url text default '',
   assigned_fi text default '',
-  status text default 'active'
+  status text default 'active',
+  last_login timestamptz
 );
+
+-- Add new columns to existing tables (safe to re-run)
+alter table public.user_profiles add column if not exists first_name text default '';
+alter table public.user_profiles add column if not exists last_name text default '';
+alter table public.user_profiles add column if not exists contact text default '';
+alter table public.user_profiles add column if not exists last_login timestamptz;
 
 create table if not exists public.app_settings (
   key text primary key,

@@ -155,6 +155,17 @@ nav {
 .user-status-chip { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 700; }
 .status-active     { background: #d4edda; color: #155724; }
 .status-restricted { background: #fee2e2; color: #991b1b; }
+.admin-edit-btn { background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; padding: 3px 9px; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer; }
+.user-edit-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:500; }
+.user-edit-overlay.open { display:flex; }
+.user-edit-card { background:var(--surface);border-radius:12px;width:420px;max-width:96vw;box-shadow:0 16px 48px rgba(0,0,0,0.2);display:flex;flex-direction:column; }
+.user-edit-header { padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center; }
+.user-edit-header h3 { font-size:14px;font-weight:700;margin:0; }
+.user-edit-body { padding:20px;display:flex;flex-direction:column;gap:12px; }
+.user-edit-field label { display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px; }
+.user-edit-field input { width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font);outline:none; }
+.user-edit-field input:focus { border-color:var(--accent); }
+.user-edit-footer { padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px; }
 
 /* PROFILE AVATAR + DROPDOWN */
 .nav-profile-wrap { position: relative; display: flex; align-items: center; }
@@ -1744,6 +1755,26 @@ canvas { width:100% !important; }
   </div>
 </div>
 
+<div class="user-edit-overlay" id="user-edit-overlay" onclick="if(event.target===this)closeEditUserModal()">
+  <div class="user-edit-card">
+    <div class="user-edit-header">
+      <h3 id="user-edit-title">Edit User Profile</h3>
+      <button onclick="closeEditUserModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted)">×</button>
+    </div>
+    <div class="user-edit-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="user-edit-field"><label>First Name</label><input id="ue-first-name" type="text" placeholder="First name"></div>
+        <div class="user-edit-field"><label>Last Name</label><input id="ue-last-name" type="text" placeholder="Last name"></div>
+      </div>
+      <div class="user-edit-field"><label>Email Address</label><input id="ue-email" type="email" placeholder="email@example.com"></div>
+      <div class="user-edit-field"><label>Contact Number</label><input id="ue-contact" type="text" placeholder="+63 9xx xxx xxxx"></div>
+    </div>
+    <div class="user-edit-footer">
+      <button class="btn btn-ghost" onclick="closeEditUserModal()">Cancel</button>
+      <button class="btn btn-primary" id="ue-save-btn" onclick="saveEditUserModal()">Save Changes</button>
+    </div>
+  </div>
+</div>
 </div><!-- /#app-wrapper -->
 
 <script>
@@ -1779,7 +1810,10 @@ async function _loadCurrentUser(userId) {
       username:    data.username    || '',
       role:        data.role        || 'viewer',
       displayName: data.display_name || '',
+      firstName:   data.first_name  || '',
+      lastName:    data.last_name   || '',
       email:       data.email       || '',
+      contact:     data.contact     || '',
       photoUrl:    data.photo_url   || '',
       assignedFi:  data.assigned_fi || null,
       status:      data.status      || 'active',
@@ -4648,6 +4682,8 @@ async function doLogin() {
   }
 
   _showLoading('Loading your data…');
+  // Record last login time (fire-and-forget)
+  _sb.from('user_profiles').update({ last_login: new Date().toISOString() }).eq('user_id', data.user.id).then(() => {});
   try {
     await _loadCurrentUser(data.user.id);
     if (_currentUser.status === 'restricted') {
@@ -4993,6 +5029,7 @@ async function renderAdminPanel() {
   body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Loading users…</div>';
 
   const { data: profiles } = await _sb.from('user_profiles').select('*').order('username');
+  const isSuperAdmin = APP_CONFIG.getRole() === 'super_admin';
   const fiOptions = getFiOptions();
   const assignableRoles = [
     { value: 'viewer', label: 'Viewer' }, { value: 'user', label: 'User' },
@@ -5008,20 +5045,62 @@ async function renderAdminPanel() {
       ? `<button class="admin-restore-btn"  onclick="restoreUser('${p.username}')">Restore</button>`
       : `<button class="admin-restrict-btn" onclick="restrictUser('${p.username}')">Restrict</button>`;
     const isMe = p.username === _currentUser.username;
+    const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.display_name || '—';
+    const lastLoginStr = p.last_login
+      ? new Date(p.last_login).toLocaleString('en-PH', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+      : 'Never';
+    const lastLoginCol = isSuperAdmin ? `<td style="font-size:11px;color:var(--muted);white-space:nowrap">${lastLoginStr}</td>` : '';
+    const editBtn = isSuperAdmin ? `<button class="admin-edit-btn" onclick="openEditUserModal('${p.username}')">Edit</button>` : '';
     return `<tr>
       <td>${p.username}${isMe ? ' <span style="font-size:9px;color:var(--muted)">(you)</span>' : ''}</td>
-      <td>${p.display_name || '—'}</td><td>${p.email || '—'}</td>
+      <td>${fullName}</td><td style="font-size:11px">${p.email || '—'}</td>
       <td><span class="role-badge" style="background:${rd.bg};color:${rd.color}">${rd.label}</span></td>
       <td><select class="admin-role-select" onchange="changeUserRole('${p.username}',this.value)">${roleOpts}</select></td>
       <td>${showFi ? `<select class="admin-fi-select" onchange="changeUserFi('${p.username}',this.value)">${fiOpts}</select>` : '<span style="font-size:11px;color:var(--muted)">—</span>'}</td>
       <td><span class="user-status-chip ${p.status==='restricted'?'status-restricted':'status-active'}">${p.status}</span></td>
-      <td style="display:flex;gap:4px;flex-wrap:wrap">${restrictBtn}${!isMe ? `<button class="admin-delete-btn" onclick="deleteUser('${p.username}')">Delete</button>` : ''}</td>
+      ${lastLoginCol}
+      <td style="display:flex;gap:4px;flex-wrap:wrap">${editBtn}${restrictBtn}${!isMe ? `<button class="admin-delete-btn" onclick="deleteUser('${p.username}')">Delete</button>` : ''}</td>
     </tr>`;
   }).join('');
+  const lastLoginHeader = isSuperAdmin ? '<th>Last Login</th>' : '';
   body.innerHTML = `<table class="admin-user-table"><thead><tr>
     <th>Username</th><th>Name</th><th>Email</th><th>Role</th>
-    <th>Change Role</th><th>Assigned FI</th><th>Status</th><th>Actions</th>
+    <th>Change Role</th><th>Assigned FI</th><th>Status</th>${lastLoginHeader}<th>Actions</th>
   </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+let _editUserTarget = null;
+function openEditUserModal(username) {
+  _editUserTarget = username;
+  // fetch latest profile data
+  _sb.from('user_profiles').select('first_name,last_name,email,contact').eq('username', username).single()
+    .then(({ data }) => {
+      document.getElementById('ue-first-name').value = data?.first_name || '';
+      document.getElementById('ue-last-name').value  = data?.last_name  || '';
+      document.getElementById('ue-email').value      = data?.email      || '';
+      document.getElementById('ue-contact').value    = data?.contact    || '';
+      document.getElementById('user-edit-title').textContent = `Edit Profile — ${username}`;
+      document.getElementById('user-edit-overlay').classList.add('open');
+    });
+}
+function closeEditUserModal() {
+  document.getElementById('user-edit-overlay').classList.remove('open');
+  _editUserTarget = null;
+}
+async function saveEditUserModal() {
+  if (!_editUserTarget) return;
+  const btn = document.getElementById('ue-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const { error } = await _sb.from('user_profiles').update({
+    first_name: document.getElementById('ue-first-name').value.trim(),
+    last_name:  document.getElementById('ue-last-name').value.trim(),
+    email:      document.getElementById('ue-email').value.trim(),
+    contact:    document.getElementById('ue-contact').value.trim(),
+  }).eq('username', _editUserTarget);
+  btn.disabled = false; btn.textContent = 'Save Changes';
+  if (error) { alert('Save failed: ' + error.message); return; }
+  closeEditUserModal();
+  renderAdminPanel();
 }
 
 async function changeUserRole(username, newRole) {
