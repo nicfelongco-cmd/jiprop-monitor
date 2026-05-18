@@ -1,8 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SUPABASE_URL            = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_ANON_KEY       = Deno.env.get('SUPABASE_ANON_KEY')!;
-const SUPABASE_SERVICE_ROLE   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPABASE_URL          = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -13,17 +12,17 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify caller is sp_admin or super_admin
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) return json({ error: 'Unauthorized' }, 401);
 
-    const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user } } = await callerClient.auth.getUser();
-    if (!user) return json({ error: 'Unauthorized' }, 401);
+    const token = authHeader.replace('Bearer ', '');
+    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
 
-    const { data: profile } = await callerClient
+    // Verify caller using admin client (no anon key needed)
+    const { data: { user }, error: userErr } = await adminClient.auth.getUser(token);
+    if (userErr || !user) return json({ error: 'Unauthorized' }, 401);
+
+    const { data: profile } = await adminClient
       .from('user_profiles').select('role').eq('user_id', user.id).single();
     if (!['sp_admin', 'super_admin'].includes(profile?.role)) {
       return json({ error: 'Forbidden: insufficient role' }, 403);
@@ -32,8 +31,6 @@ Deno.serve(async (req) => {
     const { username, password, role, assignedFi } = await req.json();
     if (!username || !password) return json({ error: 'Username and password required' }, 400);
 
-    // Create user via admin API — no email sent
-    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
     const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
       email: `${username}@jiprop.app`,
       password,
@@ -41,7 +38,6 @@ Deno.serve(async (req) => {
     });
     if (createErr) return json({ error: createErr.message }, 400);
 
-    // Insert profile
     const { error: profileErr } = await adminClient.from('user_profiles').insert({
       user_id: created.user.id,
       username,
