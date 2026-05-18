@@ -4664,11 +4664,15 @@ async function doLogin() {
 
 async function doLogout() {
   closeProfilePanel();
+  await _sb.removeAllChannels();
   await _sb.auth.signOut();
   _currentUser = { id: null, username: '', role: 'viewer', displayName: '', email: '', photoUrl: '', assignedFi: null, status: 'active' };
   DB.length = 0;
+  filteredUnits = [];
+  selectedId = null;
   document.getElementById('app-wrapper').style.display = 'none';
   document.getElementById('login-page').style.display  = 'flex';
+  document.getElementById('login-username').value = '';
   document.getElementById('login-password').value = '';
   document.getElementById('login-error').style.display = 'none';
   const av = document.getElementById('nav-avatar');
