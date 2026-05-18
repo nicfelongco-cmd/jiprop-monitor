@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(open -a \"Visual Studio Code\" \"vscode://vscode.simpleBrowser/show?url=http%3A%2F%2Flocalhost%3A8765%2Fjtower_conversion_monitor.html\")"
+    ]
+  }
+}
