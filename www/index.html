@@ -1130,6 +1130,20 @@ canvas { width:100% !important; }
   .entry-layout:not(.unit-open) .entry-main { display: none !important; }
   .entry-layout.unit-open .entry-sidebar { display: none !important; }
 
+  /* Entry form on phone: compact header, collapse status/stage/endorsement */
+  .entry-top {
+    padding: 10px 14px !important;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+    align-items: center !important;
+  }
+  .entry-top-actions { display: none !important; }   /* hides status+dashboard row */
+  .entry-phone-bar { display: flex !important; }     /* shows compact toggle row */
+  .endorse-banner { display: none !important; }
+  .stage-indicator { display: none !important; }
+  .entry-phone-panel { display: block; }             /* collapsible panel */
+  .entry-phone-panel.collapsed { display: none !important; }
+
   /* Form grids → single column */
   .form-grid { grid-template-columns: 1fr !important; }
   .ecar-grid { grid-template-columns: 1fr !important; }
@@ -1157,6 +1171,23 @@ canvas { width:100% !important; }
 
 /* Hide mobile back button on tablet+ */
 .mobile-back-btn { display: none; }
+
+/* Phone-only entry action bar (toggle button row) — hidden on tablet/desktop */
+.entry-phone-bar {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.entry-phone-toggle-btn {
+  flex: 1; padding: 6px 12px; border-radius: 5px; border: 1px solid var(--border);
+  background: var(--surface2); font-size: 11px; font-weight: 600; cursor: pointer;
+  font-family: var(--font); color: var(--text); text-align: left;
+  display: flex; align-items: center; justify-content: space-between;
+}
 
 /* ══════════════════════════════════════════════
    HAMBURGER / RETRACTABLE NAV MENU
@@ -2922,6 +2953,7 @@ function renderUnitList() {
 
 function selectUnit(id) {
   selectedId = id;
+  _phoneEntryPanelOpen = false;
   renderUnitList();
   renderEntryForm();
   // Mobile: slide to form panel
@@ -3017,7 +3049,7 @@ function renderEntryForm() {
         <div class="entry-title">${r.unit_code} — Floor ${r.floor || '?'}</div>
         <div class="entry-subtitle">${r.present_buyer} · ${r.unit_type || 'N/A'} · CCT: ${r.cct_under_developer || '—'}</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div class="entry-top-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div class="status-selector">
           <button class="status-btn ${r.sale_status==='unsold'?'active-unsold':''}"   onclick="changeStatus(${r._id},'unsold')">Unsold</button>
           <button class="status-btn ${r.sale_status==='sold'?'active-sold':''}"       onclick="changeStatus(${r._id},'sold')">Sold</button>
@@ -3027,8 +3059,30 @@ function renderEntryForm() {
       </div>
     </div>
 
-    ${renderEndorsedBanner(r)}
+    <!-- Phone-only: compact toggle bar for status/endorsement/stage -->
+    <div class="entry-phone-bar" id="entry-phone-bar">
+      <button class="entry-phone-toggle-btn" onclick="toggleEntryPhonePanel()">
+        <span id="entry-phone-status-label">Status: ${({unsold:'Unsold',sold:'Sold',for_transfer:'For Transfer'})[r.sale_status]||r.sale_status}</span>
+        <span id="entry-phone-chevron">▾ Details</span>
+      </button>
+    </div>
 
+    <!-- Collapsible panel (phone only): status + endorsement — collapsed by default -->
+    <div class="entry-phone-panel collapsed" id="entry-phone-panel">
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Account Status</div>
+        <div class="status-selector">
+          <button class="status-btn ${r.sale_status==='unsold'?'active-unsold':''}"   onclick="changeStatus(${r._id},'unsold');updatePhoneStatusLabel('Unsold')">Unsold</button>
+          <button class="status-btn ${r.sale_status==='sold'?'active-sold':''}"       onclick="changeStatus(${r._id},'sold');updatePhoneStatusLabel('Sold')">Sold</button>
+          <button class="status-btn ${r.sale_status==='for_transfer'?'active-transfer':''}" onclick="changeStatus(${r._id},'for_transfer');updatePhoneStatusLabel('For Transfer')">For Transfer</button>
+        </div>
+        <button class="btn btn-ghost" style="margin-top:8px;font-size:11px;width:100%" onclick="renderDashboard();switchView('dashboard')">View in Dashboard</button>
+      </div>
+      <div class="phone-endorsement-wrap">${renderEndorsedBanner(r)}</div>
+    </div>
+
+    <!-- Desktop endorsement + stage (hidden on phone via CSS) -->
+    ${renderEndorsedBanner(r)}
     <div class="stage-indicator">
       ${renderStageIndicatorHTML(r)}
     </div>
@@ -4673,13 +4727,54 @@ document.addEventListener('click', e => {
   if (wrap && !wrap.contains(e.target)) closeProfilePanel();
 });
 
-// On resize to tablet/desktop: remove mobile slide state from entry layout
-window.addEventListener('resize', () => {
-  if (window.innerWidth >= 768) {
+// ── Responsive layout enforcer (belt-and-suspenders alongside CSS) ──────────
+function applyResponsiveLayout() {
+  const w = window.innerWidth;
+  const isPhone  = w < 768;
+  const isTablet = w >= 768 && w < 1024;
+
+  // Nav tabs: desktop only
+  const navTabs = document.querySelector('.nav-tabs');
+  if (navTabs) navTabs.style.display = (!isPhone && !isTablet) ? '' : 'none';
+
+  // Hamburger: phone + tablet
+  const hamBtn = document.getElementById('ham-btn');
+  if (hamBtn) hamBtn.style.display = (isPhone || isTablet) ? 'flex' : 'none';
+
+  // Admin button in nav: desktop only
+  const adminBtn = document.getElementById('admin-nav-btn');
+  if (adminBtn) adminBtn.style.display = (!isPhone && !isTablet) ? '' : 'none';
+
+  // Notif wrap: desktop only
+  const notifWrap = document.getElementById('notif-wrap');
+  if (notifWrap) notifWrap.style.display = (!isPhone && !isTablet) ? '' : 'none';
+
+  // Bottom tab bar: phone only
+  const tabbar = document.getElementById('mobile-tabbar');
+  if (tabbar) tabbar.style.display = isPhone ? '' : 'none';
+
+  // Entry layout: remove .unit-open when widening to tablet/desktop
+  if (!isPhone) {
     const layout = document.querySelector('.entry-layout');
     if (layout) layout.classList.remove('unit-open');
   }
-});
+}
+
+window.addEventListener('resize', applyResponsiveLayout);
+
+// ── Phone entry form panel toggle ────────────────────────────────────────────
+let _phoneEntryPanelOpen = false;
+function toggleEntryPhonePanel() {
+  _phoneEntryPanelOpen = !_phoneEntryPanelOpen;
+  const panel = document.getElementById('entry-phone-panel');
+  const chevron = document.getElementById('entry-phone-chevron');
+  if (panel) panel.classList.toggle('collapsed', !_phoneEntryPanelOpen);
+  if (chevron) chevron.textContent = _phoneEntryPanelOpen ? '▴ Less' : '▾ Details';
+}
+function updatePhoneStatusLabel(label) {
+  const el = document.getElementById('entry-phone-status-label');
+  if (el) el.textContent = 'Status: ' + label;
+}
 
 // ============================================================
 // AUTH — Supabase
@@ -4691,6 +4786,7 @@ function showApp() {
   updateNavTabs();
   renderNavProfile();
   renderNotificationBell();
+  applyResponsiveLayout();
 }
 
 async function doLogin() {
@@ -4850,11 +4946,12 @@ function googleAction(type) {
 // NAV TABS + VIEWER FI FILTER
 // ============================================================
 function updateNavTabs() {
+  const _onDesktop = window.innerWidth >= 1024;
   document.querySelectorAll('.nav-tab').forEach(el => {
     const onclick = el.getAttribute('onclick') || '';
     const view    = (onclick.match(/switchView\('(\w+)'\)/) || [])[1];
-    if (view === 'entry')  el.style.display = APP_CONFIG.can('write') ? '' : 'none';
-    if (view === 'report') el.style.display = APP_CONFIG.can('generate_reports') ? '' : 'none';
+    if (view === 'entry')  el.style.display = (_onDesktop && APP_CONFIG.can('write'))           ? '' : 'none';
+    if (view === 'report') el.style.display = (_onDesktop && APP_CONFIG.can('generate_reports')) ? '' : 'none';
   });
   const finTab = document.getElementById('finance-nav-tab');
   if (finTab) finTab.style.display = APP_CONFIG.can('view_finance') ? '' : 'none';
