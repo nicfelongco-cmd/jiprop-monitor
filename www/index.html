@@ -2505,7 +2505,7 @@ function switchView(v) {
   // Scroll to top on view switch (mobile UX)
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (v === 'dashboard') renderDashboard();
-  if (v === 'entry')   { filteredUnits = [...DB]; renderUnitList(); }
+  if (v === 'entry')   { _syncFilterPills('status-pills', activeStatusTab); _syncFilterPills('stage-pills', activeStageFilter); _syncFilterPills('endorsed-pills', activeEndorsedFilter); _updateFilterBtn(); filterUnits(); }
   if (v === 'report')    renderReport();
   if (v === 'summary')   renderSummary();
   if (v === 'finance')   renderFinance();
@@ -5332,6 +5332,10 @@ async function doLogout() {
   DB.length = 0;
   filteredUnits = [];
   selectedId = null;
+  activeStatusTab      = 'all';
+  activeStageFilter    = null;
+  activeEndorsedFilter = null;
+  activeCardFilter     = null;
   document.getElementById('app-wrapper').style.display = 'none';
   document.getElementById('login-page').style.display  = 'flex';
   document.getElementById('login-username').value = '';
