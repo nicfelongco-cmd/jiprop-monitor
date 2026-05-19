@@ -1889,6 +1889,15 @@ canvas { width:100% !important; }
         </div>
         <div class="filter-menu" id="filter-menu" style="display:none">
           <div class="filter-menu-section">
+            <div class="filter-menu-label">Status</div>
+            <div class="filter-pills" id="status-pills">
+              <button class="filter-pill fp-active" data-val="all"      onclick="setStatusTab('all')">All</button>
+              <button class="filter-pill"           data-val="unsold"   onclick="setStatusTab('unsold')">Unsold</button>
+              <button class="filter-pill"           data-val="sold"     onclick="setStatusTab('sold')">Sold</button>
+              <button class="filter-pill"           data-val="transfer" onclick="setStatusTab('transfer')">For Transfer</button>
+            </div>
+          </div>
+          <div class="filter-menu-section">
             <div class="filter-menu-label">Stage</div>
             <div class="filter-pills" id="stage-pills">
               <button class="filter-pill fp-active" data-val="null" onclick="setStageFilter(null)">All</button>
@@ -1907,12 +1916,6 @@ canvas { width:100% !important; }
             </div>
           </div>
         </div>
-      </div>
-      <div class="status-tabs">
-        <button class="status-tab active-all" data-tab="all"      onclick="setStatusTab('all')">All</button>
-        <button class="status-tab"            data-tab="unsold"   onclick="setStatusTab('unsold')">Unsold</button>
-        <button class="status-tab"            data-tab="sold"     onclick="setStatusTab('sold')">Sold</button>
-        <button class="status-tab"            data-tab="transfer" onclick="setStatusTab('transfer')">For Transfer</button>
       </div>
       <button class="add-unit-btn" onclick="renderAddForm()">+ Add New Unit</button>
       <div class="unit-list" id="unit-list"></div>
@@ -2597,6 +2600,8 @@ function openCardFilter() {
   activeCardFilter = currentSummaryCard;
   activeStatusTab  = 'all';
   switchView('entry');
+  _syncFilterPills('status-pills', 'all');
+  _updateFilterBtn();
 }
 
 // ============================================================
@@ -3155,7 +3160,9 @@ function _syncFilterPills(groupId, activeVal) {
   });
 }
 function _updateFilterBtn() {
-  const count = (activeStageFilter !== null ? 1 : 0) + (activeEndorsedFilter !== null ? 1 : 0);
+  const count = (activeStatusTab !== 'all' ? 1 : 0) +
+                (activeStageFilter !== null ? 1 : 0) +
+                (activeEndorsedFilter !== null ? 1 : 0);
   const badge = document.getElementById('filter-count-badge');
   const btn   = document.getElementById('filter-menu-btn');
   if (badge) { badge.textContent = count; badge.style.display = count > 0 ? 'inline' : 'none'; }
@@ -3164,9 +3171,8 @@ function _updateFilterBtn() {
 
 function setStatusTab(tab) {
   activeStatusTab = tab;
-  document.querySelectorAll('.status-tab').forEach(el => {
-    el.className = 'status-tab' + (el.dataset.tab === tab ? ` active-${tab === 'transfer' ? 'transfer' : tab}` : '');
-  });
+  _syncFilterPills('status-pills', tab);
+  _updateFilterBtn();
   filterUnits();
 }
 
