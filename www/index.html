@@ -5337,6 +5337,10 @@ async function doLogout() {
   activeStageFilter    = null;
   activeEndorsedFilter = null;
   activeCardFilter     = null;
+  _syncFilterPills('status-pills', 'all');
+  _syncFilterPills('stage-pills', null);
+  _syncFilterPills('endorsed-pills', null);
+  _updateFilterBtn();
   document.getElementById('app-wrapper').style.display = 'none';
   document.getElementById('login-page').style.display  = 'flex';
   document.getElementById('login-username').value = '';
