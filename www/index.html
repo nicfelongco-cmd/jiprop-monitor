@@ -3519,12 +3519,12 @@ function renderAddForm() {
     <div class="save-bar">
       <span class="save-feedback" id="save-feedback"></span>
       <button class="btn btn-ghost" onclick="renderUnitList();document.getElementById('entry-main').innerHTML='<div class=\\'no-selection\\'><div class=\\'icon\\'>🏢</div><div>Select a unit from the list to view and edit</div></div>'">Cancel</button>
-      <button class="btn btn-success" onclick="addNewUnit()">Add Unit</button>
+      <button class="btn btn-success" id="add-unit-btn" onclick="addNewUnit()">Add Unit</button>
     </div>
   `;
 }
 
-function addNewUnit() {
+async function addNewUnit() {
   const floor    = (document.getElementById('new_floor')?.value || '').trim();
   const unitNo   = (document.getElementById('new_unit_no')?.value || '').trim();
   const unitType = (document.getElementById('new_unit_type')?.value || '').trim();
@@ -3537,15 +3537,21 @@ function addNewUnit() {
     return;
   }
 
+  const btn = document.getElementById('add-unit-btn');
+  const fb  = document.getElementById('save-feedback');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
   const floorNum = parseInt(parseFloat(floor));
   const unitCode = `JT${floorNum}${unitNo}`;
+  const newId    = DB.length;
 
   const newUnit = {
+    _id: newId, _isExtra: true, seq: null, code: '',
     floor, unit_no: unitNo, unit_code: unitCode, unit_type: unitType,
     sale_status: status, present_buyer: buyer, cct_under_developer: cctDev,
     previous_buyer:'', tin_number:'', financial_institution:'', date_loan_credited:'',
     bank_remarks:'', total_contract_price:'', doas_notarial_date:'', tax_dec_under_developer:'',
-    sp_endorsed_date:'',
+    sp_endorsed_date:'', ecar_checklist:{},
     cwt_final_fees:'', cwt_check_no:'', cwt_date_paid:'', dst_fees:'', dst_check_no:'',
     dst_date_paid:'', bir_entry_date:'', bir_status:'', ecar_release_date:'',
     transfer_charge_amt:'', transfer_tax_date_paid:'',
@@ -3555,16 +3561,37 @@ function addNewUnit() {
     taxdec_entry_date:'', taxdec_inspection_fees:'',
     taxdec_status:'', converted_taxdec_buyer:'', taxdec_released_date:'',
     cct_forwarded_to:'', cct_forwarded_date:'', td_forwarded_to:'', td_forwarded_date:'',
-    remarks:'', _isExtra: true,
+    remarks:'',
   };
 
-  newUnit._id = DB.length;
+  // Direct insert (not debounced) so we get immediate error feedback
+  const { error } = await _sb.from('units').insert(_toCloudRecord(newUnit));
+
+  if (error) {
+    if (fb) {
+      fb.textContent = `Save failed: ${error.message}`;
+      fb.style.color = 'var(--red, #ef4444)';
+      fb.classList.add('show');
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'Add Unit'; }
+    return;
+  }
+
+  // Save succeeded — add to local DB and navigate to the edit form
   DB.push(newUnit);
-  persistState(newUnit._id);
   selectedId = newUnit._id;
   filterUnits();
   renderEntryForm();
   renderDashboard();
+
+  // Show success message in the newly rendered entry form
+  const fb2 = document.getElementById('save-feedback');
+  if (fb2) {
+    fb2.textContent = 'Unit Added. You may now update it under Entry / Update.';
+    fb2.style.color = '';
+    fb2.classList.add('show');
+    setTimeout(() => fb2.classList.remove('show'), 6000);
+  }
 }
 
 // ============================================================
