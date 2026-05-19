@@ -2894,17 +2894,16 @@ async function refreshDocSlot(unitId, docType) {
     // Keep ecar_checklist in sync so birStatusField counts correctly
     const r = DB.find(u => u._id === unitId);
     if (r) {
-      if (!r.ecar_checklist) r.ecar_checklist = {};
+      // Supabase Realtime can return JSONB columns as strings — always ensure object
+      if (typeof r.ecar_checklist === 'string') {
+        try { r.ecar_checklist = JSON.parse(r.ecar_checklist); } catch { r.ecar_checklist = {}; }
+      }
+      if (!r.ecar_checklist || typeof r.ecar_checklist !== 'object') r.ecar_checklist = {};
       r.ecar_checklist[docType] = hasFiles;
       persistState(unitId);
-      // Refresh progress bar
-      const done  = ECAR_CHECKLIST_ITEMS.filter(i => r.ecar_checklist[i.key]).length;
-      const total = ECAR_CHECKLIST_ITEMS.length;
-      const lbl   = document.querySelector(`[data-ecar-progress="${unitId}"]`);
-      if (lbl) lbl.textContent = `${done} / ${total} documents attached`;
-      const fill  = document.querySelector(`[data-ecar-fill="${unitId}"]`);
-      if (fill) { fill.style.width = Math.round(done/total*100) + '%'; fill.style.background = done===total ? 'var(--green)' : 'var(--accent)'; }
     }
+    // Always update progress bar from DOM badge states (reliable regardless of DB parse issues)
+    _refreshEcarProgress(unitId);
   }
   // Update section-level status badges that depend on doc presence
   if (docType === 'rod_receipt')  updateRodStatus(unitId);
@@ -2918,6 +2917,21 @@ async function refreshDocSlot(unitId, docType) {
       persistState(unitId);
     }
   }
+}
+
+function _refreshEcarProgress(unitId) {
+  const total = ECAR_CHECKLIST_ITEMS.length;
+  const done = ECAR_CHECKLIST_ITEMS.filter(item => {
+    const badge = document.getElementById(`ecar-status-${unitId}-${item.key}`);
+    return badge?.classList.contains('available');
+  }).length;
+  const pct = Math.round(done / total * 100);
+  const lbl = document.querySelector(`[data-ecar-progress="${unitId}"]`);
+  if (lbl) lbl.textContent = `${done} / ${total} documents attached`;
+  const fill = document.querySelector(`[data-ecar-fill="${unitId}"]`);
+  if (fill) { fill.style.width = pct + '%'; fill.style.background = done === total ? 'var(--green)' : 'var(--accent)'; }
+  const pctSpan = document.querySelector(`[data-ecar-pct="${unitId}"]`);
+  if (pctSpan) { pctSpan.textContent = pct + '%'; pctSpan.style.color = pct === 100 ? 'var(--green)' : 'var(--muted)'; }
 }
 
 async function downloadDoc(unitId, docType, idx) {
@@ -2970,7 +2984,7 @@ function ecarChecklistHtml(r) {
       <div style="flex:1">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <span class="ecar-progress-label" data-ecar-progress="${r._id}">${done} / ${total} documents attached</span>
-          <span style="font-size:11px;font-family:var(--mono);font-weight:600;color:${pct===100?'var(--green)':'var(--muted)'}">${pct}%</span>
+          <span data-ecar-pct="${r._id}" style="font-size:11px;font-family:var(--mono);font-weight:600;color:${pct===100?'var(--green)':'var(--muted)'}">${pct}%</span>
         </div>
         <div class="ecar-prog-bg"><div class="ecar-prog-fill" data-ecar-fill="${r._id}" style="width:${pct}%;background:${pct===100?'var(--green)':'var(--accent)'}"></div></div>
       </div>
