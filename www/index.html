@@ -2710,7 +2710,8 @@ async function idbGetFiles(unitId, docType) {
 }
 
 async function idbAddFile(unitId, docType, file) {
-  const path = _storagePath(unitId, docType, `${Date.now()}_${file.name}`);
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = _storagePath(unitId, docType, `${Date.now()}_${safeName}`);
   const { error: upErr } = await _sb.storage.from(DOC_BUCKET).upload(path, file);
   if (upErr) throw new Error(upErr.message || 'Storage upload failed');
   const docId = `${unitId}_${docType}_${Date.now()}`;
