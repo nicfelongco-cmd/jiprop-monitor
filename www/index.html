@@ -598,6 +598,17 @@ textarea { resize: vertical; min-height: 60px; }
 .fi-manage-link { font-size: 10px; color: var(--accent2); cursor: pointer; text-decoration: underline; margin-left: 6px; font-weight: 600; }
 /* select option disabled */
 select option:disabled { color: var(--muted); }
+/* Unit Code change modal */
+#code-change-modal { position:fixed;inset:0;z-index:2100;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;padding:24px; }
+#code-change-modal.open { display:flex; }
+.code-change-card { background:#fff;border-radius:12px;padding:28px 30px 24px;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(0,0,0,0.18); }
+.code-change-card h3 { font-size:15px;font-weight:700;margin-bottom:4px; }
+.code-change-card .cc-sub { font-size:12px;color:var(--muted);margin-bottom:16px; }
+.code-change-actions { display:flex;justify-content:flex-end;gap:8px;margin-top:16px; }
+.unit-code-action { margin-top:6px; }
+.unit-code-pending { font-size:11px;color:var(--amber,#f59e0b);display:flex;align-items:center;gap:4px;margin-top:4px; }
+.unit-code-locked { font-size:11px;color:var(--muted);margin-top:4px; }
+.btn-xs { font-size:11px;padding:3px 10px;border-radius:5px; }
 .entry-phone-panel { display: none; }  /* shown only on phone via media query */
 .phone-endorse-section { display: none; } /* shown only on phone via media query */
 .endorse-banner {
@@ -1462,6 +1473,26 @@ canvas { width:100% !important; }
     <div class="fi-modal-actions">
       <button class="btn btn-ghost" onclick="closeFiModal()">Cancel</button>
       <button class="btn btn-success" onclick="saveFiModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Unit Code Change Modal -->
+<div id="code-change-modal" onclick="if(event.target===this)closeCodeChangeModal()">
+  <div class="code-change-card">
+    <h3 id="cc-modal-title">Request Unit Code Change</h3>
+    <div class="cc-sub" id="cc-modal-sub">Submit a request to correct this unit's code. An SP Admin must approve it before the change takes effect. This can only be done once.</div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="font-size:12px;color:var(--muted)">Current Code</label>
+      <input type="text" id="cc-current-code" readonly style="opacity:0.6;cursor:not-allowed">
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label style="font-size:12px">New Code</label>
+      <input type="text" id="cc-new-code" placeholder="e.g. JT1005" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+    </div>
+    <div class="code-change-actions">
+      <button class="btn btn-ghost" onclick="closeCodeChangeModal()">Cancel</button>
+      <button class="btn btn-primary" id="cc-submit-btn" onclick="submitCodeChangeRequest()">Submit Request</button>
     </div>
   </div>
 </div>
@@ -3129,7 +3160,7 @@ function renderEntryForm() {
       <div class="form-section">
         <div class="form-section-title">Unit Information</div>
         <div class="form-grid">
-          ${field('unit_code','Unit Code',r,'text',true)}
+          ${renderUnitCodeField(r)}
           ${field('floor','Floor',r,'text',true)}
           ${field('unit_type','Unit Type',r,'text')}
           ${field('present_buyer','Present Buyer',r,'text')}
@@ -3467,6 +3498,102 @@ function changeStatus(id, newStatus) {
   });
 }
 
+// ── Unit Code field with change-request flow ────────────────
+function renderUnitCodeField(r) {
+  const unitId     = r._id;
+  const cur        = (r.unit_code || '').replace(/'/g, '&#39;');
+  const isAdmin    = APP_CONFIG.can('approve_reversals');
+  const canWrite   = APP_CONFIG.can('write');
+
+  const approved = _reversalCache.some(rev =>
+    rev.unit_id === String(unitId) && rev.field_key === 'unit_code' && rev.status === 'approved'
+  );
+  const pending = _reversalCache.find(rev =>
+    rev.unit_id === String(unitId) && rev.field_key === 'unit_code' && rev.status === 'pending'
+  );
+
+  let actionHtml = '';
+  if (approved) {
+    actionHtml = `<div class="unit-code-locked">Unit code has been permanently set and cannot be changed further.</div>`;
+  } else if (pending) {
+    actionHtml = `<div class="unit-code-pending">⏳ Code change pending: <strong>${pending.new_value}</strong></div>`;
+    if (isAdmin) {
+      actionHtml += `<div class="unit-code-action" style="display:flex;gap:6px">
+        <button class="btn btn-xs btn-primary" onclick="approveReversal('${pending.id}');setTimeout(renderEntryForm,50)">Approve</button>
+        <button class="btn btn-xs btn-ghost" onclick="denyReversal('${pending.id}');setTimeout(renderEntryForm,50)">Deny</button>
+      </div>`;
+    }
+  } else if (canWrite) {
+    const label = isAdmin ? 'Change Code' : 'Request Code Change';
+    actionHtml = `<div class="unit-code-action">
+      <button class="btn btn-xs btn-ghost" onclick="openCodeChangeModal(${unitId},'${cur}',${isAdmin})">${label}</button>
+    </div>`;
+  }
+
+  return `<div class="form-group">
+    <label>Unit Code</label>
+    <input type="text" id="f_unit_code" value="${cur}" readonly style="opacity:0.5;cursor:not-allowed" placeholder="—">
+    ${actionHtml}
+  </div>`;
+}
+
+let _ccTargetUnitId = null;
+let _ccIsAdmin = false;
+
+function openCodeChangeModal(unitId, currentCode, isAdmin) {
+  _ccTargetUnitId = unitId;
+  _ccIsAdmin = !!isAdmin;
+  const title = document.getElementById('cc-modal-title');
+  const sub   = document.getElementById('cc-modal-sub');
+  const btn   = document.getElementById('cc-submit-btn');
+  if (title) title.textContent = isAdmin ? 'Change Unit Code' : 'Request Unit Code Change';
+  if (sub) sub.textContent = isAdmin
+    ? 'Directly update this unit\'s code. This action is permanent and can only be done once.'
+    : 'Submit a request to correct this unit\'s code. An SP Admin must approve it. This can only be done once.';
+  if (btn) btn.textContent = isAdmin ? 'Apply Change' : 'Submit Request';
+  const curEl = document.getElementById('cc-current-code');
+  const newEl = document.getElementById('cc-new-code');
+  if (curEl) curEl.value = currentCode;
+  if (newEl) newEl.value = '';
+  document.getElementById('code-change-modal')?.classList.add('open');
+  setTimeout(() => newEl?.focus(), 50);
+}
+
+function closeCodeChangeModal() {
+  document.getElementById('code-change-modal')?.classList.remove('open');
+  _ccTargetUnitId = null;
+}
+
+async function submitCodeChangeRequest() {
+  const newCode = (document.getElementById('cc-new-code')?.value || '').trim().toUpperCase();
+  const curCode = (document.getElementById('cc-current-code')?.value || '').trim();
+  if (!newCode) { alert('Please enter the new unit code.'); return; }
+  if (newCode === curCode) { alert('The new code is the same as the current code.'); return; }
+
+  const unitId = _ccTargetUnitId;
+  const btn    = document.getElementById('cc-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  if (_ccIsAdmin) {
+    // SP Admin: apply directly and record as approved
+    const record = DB.find(u => u._id === (isNaN(unitId) ? unitId : Number(unitId)));
+    if (record) { record.unit_code = newCode; persistState(record._id); }
+    const id  = Date.now() + '_' + Math.random().toString(36).slice(2);
+    const req = { id, unit_id: String(unitId), field_key: 'unit_code', old_value: curCode, new_value: newCode,
+                  requested_by: _currentUser?.username || '', status: 'approved', created_at: new Date().toISOString() };
+    _reversalCache.unshift(req);
+    await _sb.from('reversal_requests').insert(req).catch(console.error);
+    closeCodeChangeModal();
+    renderEntryForm();
+  } else {
+    const username = _currentUser?.username || '';
+    submitReversalRequest(unitId, 'unit_code', curCode, newCode, username);
+    closeCodeChangeModal();
+    renderEntryForm();
+  }
+  if (btn) { btn.disabled = false; }
+}
+
 function renderAddForm() {
   selectedId = null;
   renderUnitList();
@@ -3487,11 +3614,16 @@ function renderAddForm() {
         <div class="form-grid">
           <div class="form-group">
             <label>Floor</label>
-            <input type="text" id="new_floor" placeholder="e.g. 10">
+            <input type="text" id="new_floor" placeholder="e.g. 10" oninput="_autoUpdateAddCode()">
           </div>
           <div class="form-group">
             <label>Unit No.</label>
-            <input type="text" id="new_unit_no" placeholder="e.g. 05">
+            <input type="text" id="new_unit_no" placeholder="e.g. 05" oninput="_autoUpdateAddCode()">
+          </div>
+          <div class="form-group">
+            <label>Unit Code</label>
+            <input type="text" id="new_unit_code" placeholder="Auto-filled from Floor + Unit No." style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">You may edit this before saving. It cannot be changed without an SP Admin–approved request afterwards.</div>
           </div>
           <div class="form-group">
             <label>Unit Type</label>
@@ -3524,6 +3656,17 @@ function renderAddForm() {
   `;
 }
 
+function _autoUpdateAddCode() {
+  const floor  = (document.getElementById('new_floor')?.value || '').trim();
+  const unitNo = (document.getElementById('new_unit_no')?.value || '').trim();
+  const codeEl = document.getElementById('new_unit_code');
+  if (!codeEl) return;
+  if (floor && unitNo) {
+    const floorNum = parseInt(parseFloat(floor));
+    codeEl.value = `JT${floorNum}${unitNo}`;
+  }
+}
+
 async function addNewUnit() {
   const floor    = (document.getElementById('new_floor')?.value || '').trim();
   const unitNo   = (document.getElementById('new_unit_no')?.value || '').trim();
@@ -3531,18 +3674,20 @@ async function addNewUnit() {
   const status   = document.getElementById('new_status')?.value || 'unsold';
   const buyer    = (document.getElementById('new_buyer')?.value || '').trim();
   const cctDev   = (document.getElementById('new_cct_dev')?.value || '').trim();
+  const unitCode = (document.getElementById('new_unit_code')?.value || '').trim().toUpperCase();
 
   if (!floor || !unitNo) {
     alert('Floor and Unit No. are required.');
+    return;
+  }
+  if (!unitCode) {
+    alert('Unit Code is required.');
     return;
   }
 
   const btn = document.getElementById('add-unit-btn');
   const fb  = document.getElementById('save-feedback');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-
-  const floorNum = parseInt(parseFloat(floor));
-  const unitCode = `JT${floorNum}${unitNo}`;
   const newId    = DB.length;
 
   const newUnit = {
