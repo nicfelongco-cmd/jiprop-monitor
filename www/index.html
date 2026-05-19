@@ -3171,9 +3171,17 @@ function renderEndorsedBanner(r) {
   const dateDisplay = new Date(r.sp_endorsed_date + 'T00:00:00')
     .toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
 
-  const actionBtn = isSuperAdmin
-    ? `<button class="endorse-action-btn endorse-unendorse-btn" onclick="unendorseAccount(${r._id})">Unendorse</button>`
-    : `<button class="endorse-action-btn endorse-request-btn" onclick="requestUnendorse(${r._id})">Request to Unendorse</button>`;
+  const pendingUnendorse = _reversalCache.find(rev =>
+    rev.unit_id === String(r._id) && rev.field_key === 'sp_endorsed_date' && rev.status === 'pending'
+  );
+  let actionBtn;
+  if (isSuperAdmin) {
+    actionBtn = `<button class="endorse-action-btn endorse-unendorse-btn" onclick="unendorseAccount(${r._id})">Unendorse</button>`;
+  } else if (pendingUnendorse) {
+    actionBtn = `<span class="endorse-action-btn" style="background:#fef9c3;color:#92400e;cursor:default;border-color:#fde68a">⏳ Unendorsement Pending</span>`;
+  } else {
+    actionBtn = `<button class="endorse-action-btn endorse-request-btn" onclick="requestUnendorse(${r._id})">Request to Unendorse</button>`;
+  }
 
   const dateField = isSuperAdmin
     ? `<input class="endorse-date-input" type="date" id="endorse-date-${r._id}"
@@ -3227,8 +3235,19 @@ function unendorseAccount(unitId) {
 
 function requestUnendorse(unitId) {
   const r = DB.find(u => u._id === unitId);
-  const code = r ? r.unit_code : `#${unitId}`;
-  alert(`Unendorsement request for ${code} noted.\nPlease coordinate with the system administrator to process this request.`);
+  if (!r) return;
+  // Prevent duplicate pending requests
+  const existing = _reversalCache.find(rev =>
+    rev.unit_id === String(unitId) && rev.field_key === 'sp_endorsed_date' && rev.status === 'pending'
+  );
+  if (existing) {
+    alert('An unendorsement request for this account is already pending approval.');
+    return;
+  }
+  if (!confirm(`Request unendorsement for ${r.unit_code || ('Unit #' + unitId)}?\nThis will notify the Super Admin for approval.`)) return;
+  const username = _currentUser?.username || '';
+  submitReversalRequest(unitId, 'sp_endorsed_date', r.sp_endorsed_date, '', username);
+  renderEntryForm();
 }
 
 function renderEntryForm() {
@@ -5379,6 +5398,8 @@ function approveReversal(reqId) {
   req.status = 'approved';
   _sb.from('reversal_requests').update({ status: 'approved' }).eq('id', reqId).catch(console.error);
   renderNotifPanelBody(); renderNotificationBell();
+  renderUnitList();
+  if (numId === selectedId) renderEntryForm();
 }
 
 function denyReversal(reqId) {
@@ -5388,6 +5409,8 @@ function denyReversal(reqId) {
   req.status = 'denied';
   _sb.from('reversal_requests').update({ status: 'denied' }).eq('id', reqId).catch(console.error);
   renderNotifPanelBody(); renderNotificationBell();
+  renderUnitList();
+  if (!isNaN(req.unit_id) ? Number(req.unit_id) === selectedId : req.unit_id === selectedId) renderEntryForm();
 }
 
 // ============================================================
@@ -5459,14 +5482,18 @@ function renderNotifPanelBody() {
     const numId      = isNaN(req.unit_id) ? req.unit_id : Number(req.unit_id);
     const record     = DB.find(u => u._id === numId);
     const unitCode   = record?.unit_code || ('Unit #' + req.unit_id);
-    const fieldLabel = (req.field_key || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const FIELD_LABELS = { sp_endorsed_date: 'Unendorsement Request', unit_code: 'Unit Code Change' };
+    const fieldLabel = FIELD_LABELS[req.field_key] || (req.field_key || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     const newVal     = req.new_value || '(clear)';
     const dateStr    = req.created_at ? new Date(req.created_at).toLocaleDateString() : '';
+    const detailLine = req.field_key === 'sp_endorsed_date'
+      ? `Remove endorsement (endorsed on <code>${req.old_value || '—'}</code>)`
+      : `Old: <code>${req.old_value}</code> &rarr; New: <code>${newVal}</code>`;
     return `<div class="notif-item">
       <div class="notif-item-title">${unitCode} — ${fieldLabel}</div>
       <div class="notif-item-sub">
         Requested by: <strong>${req.requested_by}</strong> &middot; ${dateStr}<br>
-        Old: <code>${req.old_value}</code> &rarr; New: <code>${newVal}</code>
+        ${detailLine}
       </div>
       <div class="notif-item-actions">
         <button class="notif-approve-btn" onclick="approveReversal('${req.id}')">Approve</button>
