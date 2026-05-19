@@ -5341,6 +5341,11 @@ async function doLogout() {
   _syncFilterPills('stage-pills', null);
   _syncFilterPills('endorsed-pills', null);
   _updateFilterBtn();
+  const entryMain = document.getElementById('entry-main');
+  if (entryMain) entryMain.innerHTML = '';
+  const unitList = document.getElementById('unit-list');
+  if (unitList) unitList.innerHTML = '';
+  document.querySelector('.entry-layout')?.classList.remove('unit-open');
   document.getElementById('app-wrapper').style.display = 'none';
   document.getElementById('login-page').style.display  = 'flex';
   document.getElementById('login-username').value = '';
