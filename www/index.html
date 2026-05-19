@@ -582,9 +582,9 @@ textarea { resize: vertical; min-height: 60px; }
 .transmittal-status.not-complied    { background: #fee2e2; color: var(--red); }
 .transmittal-status.partial-complied { background: #fef9c3; color: #92400e; }
 .transmittal-status.fully-complied  { background: #dcfce7; color: var(--green); }
-/* FI manager modal */
-#fi-modal { position: fixed; inset: 0; z-index: 2001; background: rgba(0,0,0,0.35); backdrop-filter: blur(2px); display: none; align-items: center; justify-content: center; padding: 24px; }
-#fi-modal.open { display: flex; }
+/* FI manager modal + generic opts modal */
+#fi-modal, #opts-modal { position: fixed; inset: 0; z-index: 2001; background: rgba(0,0,0,0.35); backdrop-filter: blur(2px); display: none; align-items: center; justify-content: center; padding: 24px; }
+#fi-modal.open, #opts-modal.open { display: flex; }
 .fi-modal-card { background: #fff; border-radius: 12px; padding: 28px 30px 24px; width: 100%; max-width: 420px; box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
 .fi-modal-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
 .fi-modal-card .fi-sub { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
@@ -1497,6 +1497,23 @@ canvas { width:100% !important; }
   </div>
 </div>
 
+<!-- Generic Options Manager Modal (unit type / floor) -->
+<div id="opts-modal" onclick="if(event.target===this)closeOptsModal()">
+  <div class="fi-modal-card">
+    <h3 id="opts-modal-title">Manage Options</h3>
+    <div class="fi-sub" id="opts-modal-sub"></div>
+    <div class="fi-option-list" id="opts-option-list"></div>
+    <div class="fi-add-row">
+      <input type="text" id="opts-add-input" placeholder="New option…" onkeydown="if(event.key==='Enter')optsAddOption()">
+      <button class="btn btn-ghost" onclick="optsAddOption()">Add</button>
+    </div>
+    <div class="fi-modal-actions">
+      <button class="btn btn-ghost" onclick="closeOptsModal()">Cancel</button>
+      <button class="btn btn-success" onclick="saveOptsModal()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════════════════════
      APP (hidden until authenticated)
 ════════════════════════════════════════════════════════════ -->
@@ -1977,16 +1994,22 @@ async function _initAppData() {
   // Load app_settings into cache
   const { data: settings } = await _sb.from('app_settings').select('*');
   (settings || []).forEach(s => {
-    if (s.key === 'fi_options')      _cache.fiOptions     = s.value;
-    if (s.key === 'finance_prices')  _cache.financePrices = s.value;
-    if (s.key === 'finance_paid')    _cache.financePaid   = s.value;
-    if (s.key === 'petty_cash')      _cache.pettyCash     = s.value;
-    if (s.key === 'petty_entries')   _cache.pettyEntries  = s.value;
+    if (s.key === 'fi_options')         _cache.fiOptions        = s.value;
+    if (s.key === 'finance_prices')     _cache.financePrices    = s.value;
+    if (s.key === 'finance_paid')       _cache.financePaid      = s.value;
+    if (s.key === 'petty_cash')         _cache.pettyCash        = s.value;
+    if (s.key === 'petty_entries')      _cache.pettyEntries     = s.value;
+    if (s.key === 'unit_type_options')  _cache.unitTypeOptions  = s.value;
+    if (s.key === 'floor_options')      _cache.floorOptions     = s.value;
+    if (s.key === 'unit_type_migrated') _cache.unitTypeMigrated = s.value;
   });
 
   // Load reversal requests
   const { data: reversals } = await _sb.from('reversal_requests').select('*').order('created_at', { ascending: false });
   _reversalCache = reversals || [];
+
+  // One-time migration: clear all unit_type values (super_admin only, runs once)
+  await _runUnitTypeMigration();
 
   // Subscribe to real-time unit changes
   let _rtListTimer = null;
@@ -2191,6 +2214,64 @@ const SAVE_KEYS = [
 ];
 
 // ============================================================
+// UNIT TYPE + FLOOR OPTIONS — managed by super admin
+// ============================================================
+const DEFAULT_UNIT_TYPE_OPTIONS = ['Studio','One-Bedroom','Garden Villa','Penthouse'];
+const DEFAULT_FLOOR_OPTIONS = [
+  'B2','B1','G',
+  '2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20',
+  '21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41',
+];
+function getUnitTypeOptions() { return _cache.unitTypeOptions ? [..._cache.unitTypeOptions] : [...DEFAULT_UNIT_TYPE_OPTIONS]; }
+function saveUnitTypeOptions(opts) { _cache.unitTypeOptions = opts; _saveSetting('unit_type_options', opts).catch(console.error); }
+function getFloorOptions()    { return _cache.floorOptions    ? [..._cache.floorOptions]    : [...DEFAULT_FLOOR_OPTIONS];    }
+function saveFloorOptions(opts)    { _cache.floorOptions    = opts; _saveSetting('floor_options',    opts).catch(console.error); }
+
+async function _runUnitTypeMigration() {
+  if (APP_CONFIG.getRole() !== 'super_admin') return;
+  if (_cache.unitTypeMigrated) return;
+  DB.forEach(r => { r.unit_type = ''; });
+  await _sb.from('units').update({ unit_type: '' }).neq('id', '').catch(console.error);
+  _cache.unitTypeMigrated = true;
+  _saveSetting('unit_type_migrated', true).catch(console.error);
+}
+
+// Generic options manager modal (unit_type and floor)
+let _optsModalType = '';
+let _optsModalOptions = [];
+function openOptsModal(type) {
+  _optsModalType = type;
+  _optsModalOptions = type === 'unit_type' ? getUnitTypeOptions() : getFloorOptions();
+  const titles = { unit_type: 'Manage Unit Types', floor: 'Manage Floor Options' };
+  const subs   = { unit_type: 'Add, edit, or remove unit type options.', floor: 'Add, edit, or remove floor levels.' };
+  document.getElementById('opts-modal-title').textContent = titles[type] || 'Manage Options';
+  document.getElementById('opts-modal-sub').textContent   = subs[type]  || '';
+  renderOptsOptionList();
+  document.getElementById('opts-modal').classList.add('open');
+  setTimeout(() => document.getElementById('opts-add-input')?.focus(), 50);
+}
+function closeOptsModal() { document.getElementById('opts-modal').classList.remove('open'); }
+function renderOptsOptionList() {
+  document.getElementById('opts-option-list').innerHTML = _optsModalOptions.map((opt, i) =>
+    `<div class="fi-option-row">
+      <input type="text" value="${opt}" onchange="_optsModalOptions[${i}]=this.value">
+      <button onclick="_optsModalOptions.splice(${i},1);renderOptsOptionList()" title="Remove">×</button>
+    </div>`
+  ).join('');
+}
+function optsAddOption() {
+  const inp = document.getElementById('opts-add-input');
+  const val = inp.value.trim();
+  if (val) { _optsModalOptions.push(val); inp.value = ''; renderOptsOptionList(); }
+}
+function saveOptsModal() {
+  const opts = _optsModalOptions.map(s => s.trim()).filter(Boolean);
+  if (_optsModalType === 'unit_type') saveUnitTypeOptions(opts);
+  else saveFloorOptions(opts);
+  closeOptsModal();
+  if (selectedId !== null) renderEntryForm();
+}
+
 // FINANCIAL INSTITUTION OPTIONS — managed by super admin
 // ============================================================
 const LS_FI_OPTIONS = 'jtower_fi_options';
@@ -3162,7 +3243,7 @@ function renderEntryForm() {
         <div class="form-grid">
           ${renderUnitCodeField(r)}
           ${field('floor','Floor',r,'text',true)}
-          ${field('unit_type','Unit Type',r,'text')}
+          ${unitTypeField(r)}
           ${field('present_buyer','Present Buyer',r,'text')}
           ${field('previous_buyer','Previous Buyer',r,'text')}
           ${field('tin_number','TIN Number',r,'text')}
@@ -3385,6 +3466,20 @@ async function updateTaxDecStatus(unitId) {
   const released = fieldsOk && files.length > 0;
   badge.className   = 'payment-status-badge ' + (released ? 'paid' : 'unpaid');
   badge.textContent = released ? 'Released' : 'Unavailable';
+}
+
+function unitTypeField(r) {
+  const opts  = getUnitTypeOptions();
+  const cur   = (r['unit_type'] || '').trim();
+  const allOpts = opts.includes(cur) || !cur ? opts : [cur, ...opts];
+  const optsHtml = `<option value="">— Select —</option>` +
+    allOpts.map(o => `<option value="${o}" ${cur === o ? 'selected' : ''}>${o}</option>`).join('');
+  const isSuperAdmin = APP_CONFIG.getRole() === 'super_admin';
+  const manageLink = isSuperAdmin ? `<span class="fi-manage-link" onclick="openOptsModal('unit_type')">Manage list</span>` : '';
+  return `<div class="form-group">
+    <label>Unit Type ${manageLink}</label>
+    <select id="f_unit_type">${optsHtml}</select>
+  </div>`;
 }
 
 function financialInstitutionField(r) {
@@ -3615,7 +3710,10 @@ function renderAddForm() {
         <div class="form-grid">
           <div class="form-group">
             <label>Floor</label>
-            <input type="text" id="new_floor" placeholder="e.g. 10" oninput="_autoUpdateAddCode()">
+            <select id="new_floor" onchange="_autoUpdateAddCode()">
+              <option value="">— Select —</option>
+              ${getFloorOptions().map(f => `<option value="${f}">${f}</option>`).join('')}
+            </select>
           </div>
           <div class="form-group">
             <label>Unit No.</label>
@@ -3628,7 +3726,10 @@ function renderAddForm() {
           </div>
           <div class="form-group">
             <label>Unit Type</label>
-            <input type="text" id="new_unit_type" placeholder="e.g. ST-1">
+            <select id="new_unit_type">
+              <option value="">— Select —</option>
+              ${getUnitTypeOptions().map(t => `<option value="${t}">${t}</option>`).join('')}
+            </select>
           </div>
           <div class="form-group">
             <label>Status</label>
@@ -3663,8 +3764,8 @@ function _autoUpdateAddCode() {
   const codeEl = document.getElementById('new_unit_code');
   if (!codeEl) return;
   if (floor && unitNo) {
-    const floorNum = parseInt(parseFloat(floor));
-    codeEl.value = `JT${floorNum}${unitNo}`;
+    const floorPart = isNaN(Number(floor)) ? floor : String(parseInt(floor));
+    codeEl.value = `JT${floorPart}${unitNo}`;
   }
 }
 
