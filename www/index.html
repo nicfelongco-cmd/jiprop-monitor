@@ -5122,7 +5122,7 @@ async function doLogin() {
     errEl.style.display = 'block'; return;
   }
 
-  _showLoading('Loading your data…');
+  _showLoading('Logging you in…');
   // Record last login time (fire-and-forget)
   _sb.from('user_profiles').update({ last_login: new Date().toISOString() }).eq('user_id', data.user.id).then(() => {});
   try {
