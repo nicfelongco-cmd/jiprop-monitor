@@ -1960,6 +1960,19 @@ const SUPABASE_URL      = 'https://fflemdnguwckvobzewnu.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZmbGVtZG5ndXdja3ZvYnpld251Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwOTc0NjMsImV4cCI6MjA5NDY3MzQ2M30.HQA8LpIIPAxJjGv34Xo6B3s1WnRGDkuBwnt4V5bS4Pc';
 const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Restore remembered username on page load
+(function() {
+  const saved = localStorage.getItem('jiprop_remembered_user');
+  if (saved) {
+    window.addEventListener('DOMContentLoaded', () => {
+      const u = document.getElementById('login-username');
+      const c = document.getElementById('login-remember');
+      if (u) u.value = saved;
+      if (c) c.checked = true;
+    });
+  }
+})();
+
 // In-memory caches (populated from Supabase on login)
 let _currentUser = { id: null, username: '', role: 'viewer', displayName: '', email: '', photoUrl: '', assignedFi: null, status: 'active' };
 let _cache = { fiOptions: null, financePrices: null, financePaid: null, pettyCash: null, pettyEntries: null };
@@ -5273,6 +5286,11 @@ async function doLogin() {
     errEl.textContent = error.message || 'Incorrect username or password.';
     errEl.style.display = 'block'; return;
   }
+
+  // Persist or clear remembered username
+  const rememberChecked = document.getElementById('login-remember')?.checked;
+  if (rememberChecked) localStorage.setItem('jiprop_remembered_user', username);
+  else                 localStorage.removeItem('jiprop_remembered_user');
 
   _showLoading('Logging you in…');
   // Record last login time (fire-and-forget)
