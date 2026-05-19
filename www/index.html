@@ -2712,13 +2712,14 @@ async function idbGetFiles(unitId, docType) {
 async function idbAddFile(unitId, docType, file) {
   const path = _storagePath(unitId, docType, `${Date.now()}_${file.name}`);
   const { error: upErr } = await _sb.storage.from(DOC_BUCKET).upload(path, file);
-  if (upErr) throw upErr;
+  if (upErr) throw new Error(upErr.message || 'Storage upload failed');
   const docId = `${unitId}_${docType}_${Date.now()}`;
-  await _sb.from('documents').insert({
+  const { error: dbErr } = await _sb.from('documents').insert({
     id: docId, unit_id: String(unitId), doc_type: docType,
     file_name: file.name, file_size: file.size, file_type: file.type,
     storage_path: path, uploaded_by: _currentUser.username || '',
   });
+  if (dbErr) throw new Error(dbErr.message || 'Failed to save document record');
 }
 
 async function idbRemoveFile(unitId, docType, idx) {
@@ -2749,15 +2750,58 @@ function docSlotHtml(unitId, docType) {
 
 async function handleDocUpload(input, unitId, docType) {
   if (!APP_CONFIG.can('upload')) return;
+  const results = [];
   for (const file of Array.from(input.files)) {
     if (file.size > MAX_FILE_MB * 1024 * 1024) {
-      alert(`"${file.name}" exceeds the ${MAX_FILE_MB} MB limit and was skipped.`);
+      results.push({ name: file.name, ok: false, msg: `Exceeds ${MAX_FILE_MB} MB limit` });
       continue;
     }
-    await idbAddFile(unitId, docType, file);
+    try {
+      await idbAddFile(unitId, docType, file);
+      results.push({ name: file.name, ok: true });
+    } catch (e) {
+      results.push({ name: file.name, ok: false, msg: e.message || 'Upload failed' });
+    }
   }
   input.value = '';
-  refreshDocSlot(unitId, docType);
+  await refreshDocSlot(unitId, docType);
+  _showDocFeedback(unitId, docType, results);
+}
+
+function _showDocFeedback(unitId, docType, results) {
+  if (!results.length) return;
+  const container = document.getElementById(`doc-files-${unitId}-${docType}`);
+  if (!container) return;
+  const existing = document.getElementById(`upload-fb-${unitId}-${docType}`);
+  if (existing) existing.remove();
+
+  const okCount   = results.filter(r => r.ok).length;
+  const failCount = results.filter(r => !r.ok).length;
+  const allOk     = failCount === 0;
+  const allFail   = okCount   === 0;
+
+  let msg = '';
+  if (results.length === 1) {
+    msg = results[0].ok
+      ? `✓ "${results[0].name}" uploaded successfully.`
+      : `✗ "${results[0].name}" — ${results[0].msg}`;
+  } else if (allOk) {
+    msg = `✓ ${okCount} file${okCount > 1 ? 's' : ''} uploaded successfully.`;
+  } else if (allFail) {
+    msg = `✗ All uploads failed: ` + results.map(r => `"${r.name}" (${r.msg})`).join('; ');
+  } else {
+    msg = `${okCount} uploaded, ${failCount} failed — ` + results.filter(r => !r.ok).map(r => `"${r.name}": ${r.msg}`).join('; ');
+  }
+
+  const fb = document.createElement('div');
+  fb.id = `upload-fb-${unitId}-${docType}`;
+  fb.style.cssText = 'font-size:11px;padding:4px 8px;border-radius:4px;margin-top:5px;line-height:1.4;';
+  fb.style.cssText += allOk
+    ? 'color:var(--green,#16a34a);background:#dcfce7;'
+    : 'color:var(--red,#dc2626);background:#fee2e2;';
+  fb.textContent = msg;
+  container.insertAdjacentElement('afterend', fb);
+  setTimeout(() => fb.remove(), 6000);
 }
 
 async function refreshDocSlot(unitId, docType) {
