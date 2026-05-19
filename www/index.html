@@ -3500,10 +3500,11 @@ function changeStatus(id, newStatus) {
 
 // ── Unit Code field with change-request flow ────────────────
 function renderUnitCodeField(r) {
-  const unitId     = r._id;
-  const cur        = (r.unit_code || '').replace(/'/g, '&#39;');
-  const isAdmin    = APP_CONFIG.can('approve_reversals');
-  const canWrite   = APP_CONFIG.can('write');
+  const unitId      = r._id;
+  const cur         = (r.unit_code || '').replace(/'/g, '&#39;');
+  const isSuperAdmin = APP_CONFIG.getRole() === 'super_admin';
+  const isAdmin     = APP_CONFIG.can('approve_reversals');
+  const canWrite    = APP_CONFIG.can('write');
 
   const approved = _reversalCache.some(rev =>
     rev.unit_id === String(unitId) && rev.field_key === 'unit_code' && rev.status === 'approved'
@@ -3513,9 +3514,9 @@ function renderUnitCodeField(r) {
   );
 
   let actionHtml = '';
-  if (approved) {
+  if (approved && !isSuperAdmin) {
     actionHtml = `<div class="unit-code-locked">Unit code has been permanently set and cannot be changed further.</div>`;
-  } else if (pending) {
+  } else if (pending && !isSuperAdmin) {
     actionHtml = `<div class="unit-code-pending">⏳ Code change pending: <strong>${pending.new_value}</strong></div>`;
     if (isAdmin) {
       actionHtml += `<div class="unit-code-action" style="display:flex;gap:6px">
