@@ -500,7 +500,20 @@ td.mono { font-family: var(--mono); font-size: 11px; }
 /* ENTRY PAGE */
 .entry-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: calc(100vh - 132px); }
 .entry-sidebar { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; }
-.search-box { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.search-box { padding: 12px 14px; border-bottom: 1px solid var(--border); position: relative; }
+.search-row { display: flex; gap: 6px; align-items: center; }
+.filter-menu-btn { flex-shrink:0; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:6px 9px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:4px; color:var(--text); white-space:nowrap; }
+.filter-menu-btn:hover { background:#e9e9ee; }
+.filter-menu-btn.has-filters { background:var(--accent2); color:#fff; border-color:var(--accent2); }
+.filter-count-badge { background:rgba(255,255,255,0.3); border-radius:99px; font-size:10px; font-weight:700; padding:0 5px; line-height:1.5; }
+.filter-menu { position:absolute; top:calc(100% + 2px); left:0; right:0; background:#fff; border:1px solid var(--border); border-radius:8px; padding:14px; z-index:300; box-shadow:0 6px 24px rgba(0,0,0,0.13); }
+.filter-menu-section { margin-bottom:12px; }
+.filter-menu-section:last-child { margin-bottom:0; }
+.filter-menu-label { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.7px; margin-bottom:6px; }
+.filter-pills { display:flex; flex-wrap:wrap; gap:4px; }
+.filter-pill { background:var(--surface2); border:1px solid var(--border); border-radius:99px; padding:3px 10px; font-size:11px; cursor:pointer; color:var(--text); font-family:var(--font); transition:background 0.1s; }
+.filter-pill:hover:not(.fp-active) { background:#e9e9ee; }
+.filter-pill.fp-active { background:var(--accent2); color:#fff; border-color:var(--accent2); }
 .search-input {
   width: 100%; background: var(--bg); border: 1px solid var(--border);
   color: var(--text); border-radius: 5px; padding: 8px 12px; font-size: 13px;
@@ -1868,7 +1881,32 @@ canvas { width:100% !important; }
         <button onclick="clearCardFilter()" title="Clear filter">✕ Clear</button>
       </div>
       <div class="search-box">
-        <input class="search-input" type="text" id="unit-search" placeholder="Search unit code or buyer..." oninput="filterUnits()">
+        <div class="search-row">
+          <input class="search-input" type="text" id="unit-search" placeholder="Search unit code or buyer..." oninput="filterUnits()" style="flex:1;min-width:0">
+          <button class="filter-menu-btn" id="filter-menu-btn" onclick="toggleFilterMenu(event)" title="More filters">
+            ☰ Filters<span class="filter-count-badge" id="filter-count-badge" style="display:none"></span>
+          </button>
+        </div>
+        <div class="filter-menu" id="filter-menu" style="display:none">
+          <div class="filter-menu-section">
+            <div class="filter-menu-label">Stage</div>
+            <div class="filter-pills" id="stage-pills">
+              <button class="filter-pill fp-active" data-val="null" onclick="setStageFilter(null)">All</button>
+              <button class="filter-pill" data-val="0"  onclick="setStageFilter(0)">Not Started</button>
+              <button class="filter-pill" data-val="1"  onclick="setStageFilter(1)">Docketing</button>
+              <button class="filter-pill" data-val="2"  onclick="setStageFilter(2)">BIR Filed</button>
+              <button class="filter-pill" data-val="3"  onclick="setStageFilter(3)">ECAR Released</button>
+            </div>
+          </div>
+          <div class="filter-menu-section">
+            <div class="filter-menu-label">Endorsement</div>
+            <div class="filter-pills" id="endorsed-pills">
+              <button class="filter-pill fp-active" data-val="null"         onclick="setEndorsedFilter(null)">All</button>
+              <button class="filter-pill" data-val="endorsed"     onclick="setEndorsedFilter('endorsed')">Endorsed</button>
+              <button class="filter-pill" data-val="not_endorsed" onclick="setEndorsedFilter('not_endorsed')">Not Endorsed</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="status-tabs">
         <button class="status-tab active-all" data-tab="all"      onclick="setStatusTab('all')">All</button>
@@ -3079,9 +3117,50 @@ function saveSectionFields(sectionId, unitId, btn) {
 // ENTRY PAGE
 // ============================================================
 let selectedId = null;
-let filteredUnits = [...DB];
-let activeStatusTab  = 'all';
-let activeCardFilter = null; // set by openCardFilter() from Summary view
+let filteredUnits        = [...DB];
+let activeStatusTab      = 'all';
+let activeCardFilter     = null; // set by openCardFilter() from Summary view
+let activeStageFilter    = null; // null = all, 0/1/2/3 = specific stage
+let activeEndorsedFilter = null; // null = all, 'endorsed', 'not_endorsed'
+
+function toggleFilterMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('filter-menu');
+  if (!menu) return;
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+function closeFilterMenu() {
+  const menu = document.getElementById('filter-menu');
+  if (menu) menu.style.display = 'none';
+}
+function setStageFilter(val) {
+  activeStageFilter = val;
+  _syncFilterPills('stage-pills', val);
+  _updateFilterBtn();
+  filterUnits();
+}
+function setEndorsedFilter(val) {
+  activeEndorsedFilter = val;
+  _syncFilterPills('endorsed-pills', val);
+  _updateFilterBtn();
+  filterUnits();
+}
+function _syncFilterPills(groupId, activeVal) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll('.filter-pill').forEach(btn => {
+    const raw = btn.dataset.val;
+    const v = raw === 'null' ? null : (isNaN(raw) ? raw : Number(raw));
+    btn.classList.toggle('fp-active', v === activeVal);
+  });
+}
+function _updateFilterBtn() {
+  const count = (activeStageFilter !== null ? 1 : 0) + (activeEndorsedFilter !== null ? 1 : 0);
+  const badge = document.getElementById('filter-count-badge');
+  const btn   = document.getElementById('filter-menu-btn');
+  if (badge) { badge.textContent = count; badge.style.display = count > 0 ? 'inline' : 'none'; }
+  if (btn)   btn.classList.toggle('has-filters', count > 0);
+}
 
 function setStatusTab(tab) {
   activeStatusTab = tab;
@@ -3105,6 +3184,9 @@ function filterUnits() {
   if (activeCardFilter && CARD_FILTERS[activeCardFilter]) {
     base = base.filter(CARD_FILTERS[activeCardFilter]);
   }
+  if (activeStageFilter !== null)                     base = base.filter(r => getStage(r) === activeStageFilter);
+  if (activeEndorsedFilter === 'endorsed')            base = base.filter(r => !!r.sp_endorsed_date);
+  if (activeEndorsedFilter === 'not_endorsed')        base = base.filter(r => !r.sp_endorsed_date);
   filteredUnits = q
     ? base.filter(r => (r.unit_code||'').toLowerCase().includes(q) || (r.present_buyer||'').toLowerCase().includes(q) || (r.floor||'').toString().includes(q))
     : base;
@@ -5505,6 +5587,13 @@ function renderNotifPanelBody() {
 
 // Close panels when clicking outside
 document.addEventListener('click', e => {
+  // Close filter menu if click is outside
+  const filterMenu = document.getElementById('filter-menu');
+  const filterBtn  = document.getElementById('filter-menu-btn');
+  if (filterMenu && filterMenu.style.display !== 'none' &&
+      !filterMenu.contains(e.target) && !(filterBtn && filterBtn.contains(e.target))) {
+    closeFilterMenu();
+  }
   // Close notif panel if click is outside the panel, bell button, and ham notif item
   const panel       = document.getElementById('notif-panel');
   const nw          = document.getElementById('notif-wrap');
