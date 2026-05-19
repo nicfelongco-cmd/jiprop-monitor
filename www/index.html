@@ -2008,9 +2008,6 @@ async function _initAppData() {
   const { data: reversals } = await _sb.from('reversal_requests').select('*').order('created_at', { ascending: false });
   _reversalCache = reversals || [];
 
-  // One-time migration: clear all unit_type values (super_admin only, runs once)
-  await _runUnitTypeMigration();
-
   // Subscribe to real-time unit changes
   let _rtListTimer = null;
   _sb.channel('units_rt').on('postgres_changes', { event: '*', schema: 'public', table: 'units' }, payload => {
@@ -2228,12 +2225,17 @@ function getFloorOptions()    { return _cache.floorOptions    ? [..._cache.floor
 function saveFloorOptions(opts)    { _cache.floorOptions    = opts; _saveSetting('floor_options',    opts).catch(console.error); }
 
 async function _runUnitTypeMigration() {
-  if (APP_CONFIG.getRole() !== 'super_admin') return;
-  if (_cache.unitTypeMigrated) return;
-  DB.forEach(r => { r.unit_type = ''; });
-  await _sb.from('units').update({ unit_type: '' }).neq('id', '').catch(console.error);
-  _cache.unitTypeMigrated = true;
-  _saveSetting('unit_type_migrated', true).catch(console.error);
+  try {
+    if (APP_CONFIG.getRole() !== 'super_admin') return;
+    if (_cache.unitTypeMigrated) return;
+    DB.forEach(r => { r.unit_type = ''; });
+    const { error } = await _sb.from('units').update({ unit_type: '' }).neq('id', '');
+    if (error) { console.error('unit_type migration failed:', error); return; }
+    _cache.unitTypeMigrated = true;
+    _saveSetting('unit_type_migrated', true).catch(console.error);
+  } catch (e) {
+    console.error('unit_type migration error:', e);
+  }
 }
 
 // Generic options manager modal (unit_type and floor)
@@ -5135,6 +5137,7 @@ async function doLogin() {
     await _initAppData();
   } finally { _hideLoading(); }
   showApp();
+  _runUnitTypeMigration().catch(console.error); // fire-and-forget, super_admin only
 }
 
 async function doLogout() {
