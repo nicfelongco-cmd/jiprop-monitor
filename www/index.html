@@ -3689,7 +3689,7 @@ async function addNewUnit() {
   const btn = document.getElementById('add-unit-btn');
   const fb  = document.getElementById('save-feedback');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  const newId    = DB.length;
+  const newId    = Date.now();
 
   const newUnit = {
     _id: newId, _isExtra: true, seq: null, code: '',
