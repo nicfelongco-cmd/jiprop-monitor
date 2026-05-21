@@ -2737,7 +2737,7 @@ function renderDashboard() {
     </div>`).join('')}`;
 
   // Bottleneck — active stage (excluding Not Started and Fully Complied) with most units
-  const activeNodes = PIPELINE_NODES.slice(1, -1); // skip not_started and fully_complied
+  const activeNodes = PIPELINE_NODES.slice(0, -1); // skip only fully_complied
   const bnNode = activeNodes.reduce((best, s) => s.count > best.count ? s : best, activeNodes[0]);
   document.getElementById('bottleneck-card').innerHTML = `
     <div class="bottleneck-title">Current Bottleneck</div>
