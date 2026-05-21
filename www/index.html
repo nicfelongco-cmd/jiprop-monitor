@@ -1454,7 +1454,9 @@ canvas { width:100% !important; }
         <option value="viewer">Viewer</option>
         <option value="user">User</option>
         <option value="client_admin">Client Admin</option>
+        <option value="client_finance">Client Finance</option>
         <option value="sp_admin">SP Admin</option>
+        <option value="sp_finance">SP Finance</option>
         <option value="super_admin">Super Admin</option>
       </select>
     </div>
@@ -1761,7 +1763,7 @@ canvas { width:100% !important; }
   <div id="fin-client-section" class="finance-section">
     <div class="finance-section-header">
       <div>
-        <div class="finance-section-title">Client Fee Dashboard</div>
+        <div class="finance-section-title">Client Expenses Summary</div>
         <div class="finance-section-subtitle">Aggregate fees paid by the client per category</div>
       </div>
     </div>
@@ -2128,11 +2130,13 @@ const APP_CONFIG = {
     notifications:   false,  // stub — email/push alerts on stage advance
   },
   roles: {
-    super_admin:  { label: 'Super Admin',  can: ['read','write','upload','delete','export','view_finance','manage_finance','approve_reversals','generate_reports','edit_locked_fields','manage_user_accounts','manage_accounts'] },
-    sp_admin:     { label: 'SP Admin',     can: ['read','write','upload','delete','export','view_finance','manage_finance','approve_reversals','generate_reports'] },
-    client_admin: { label: 'Client Admin', can: ['read','write','upload','export','view_finance','generate_reports'] },
-    user:         { label: 'User',         can: ['read','write','upload'] },
-    viewer:       { label: 'Viewer',       can: ['read'] },
+    super_admin:   { label: 'Super Admin',   can: ['read','write','upload','delete','export','view_finance','manage_finance','approve_reversals','generate_reports','edit_locked_fields','manage_user_accounts','manage_accounts'] },
+    sp_admin:      { label: 'SP Admin',      can: ['read','write','upload','delete','export','view_finance','manage_finance','approve_reversals','generate_reports'] },
+    sp_finance:    { label: 'SP Finance',    can: ['read','view_finance','manage_finance','approve_reversals'] },
+    client_admin:  { label: 'Client Admin',  can: ['read','write','upload','export','view_finance','generate_reports'] },
+    client_finance:{ label: 'Client Finance',can: ['read','view_finance'] },
+    user:          { label: 'User',          can: ['read','write','upload'] },
+    viewer:        { label: 'Viewer',        can: ['read'] },
   },
   getRole() { return _currentUser.role || 'viewer'; },
   can(action) { return (this.roles[this.getRole()]?.can || []).includes(action); },
@@ -4499,7 +4503,7 @@ function runExport(type) {
 const ESP_ITEMS = [
   { key:'docket_review',    label:'Docket Review',          defaultPrice:500,   trigger: r => !!r.sp_endorsed_date },
   { key:'notarization',     label:'Notarization',           defaultPrice:1500,  trigger: r => !!r._doas_uploaded },
-  { key:'ecar_processing',  label:'eCAR Processing',        defaultPrice:5500,  trigger: r => r.bir_status === 'submitted' || r.bir_status === 'ecar_released' },
+  { key:'ecar_processing',  label:'eCAR Processing',        defaultPrice:5500,  trigger: r => !!r.bir_entry_date },
   { key:'transfer_tax',     label:'Transfer Tax Processing',defaultPrice:2000,  trigger: r => !!r.transfer_tax_date_paid },
   { key:'cct_transfer',     label:'CCT Transfer',           defaultPrice:5000,  trigger: r => r.epeb_status === 'submitted_paid' },
   { key:'tax_declaration',  label:'Tax Declaration',        defaultPrice:2000,  trigger: r => r.taxdec_status === 'submitted' || r.taxdec_status === 'released' },
@@ -4592,9 +4596,9 @@ function fmt(n) {
 
 function renderFinance() {
   if (!APP_CONFIG.can('view_finance')) return;
-  const role       = APP_CONFIG.getRole();
-  const isSuperAdmin = ['super_admin', 'sp_admin'].includes(role);
-  const isClient     = role === 'client_admin';
+  const role         = APP_CONFIG.getRole();
+  const isSuperAdmin = ['super_admin', 'sp_admin', 'sp_finance'].includes(role);
+  const isClientView = ['client_admin', 'client_finance'].includes(role);
 
   // Populate billing-item stage filter
   const stageFilter = document.getElementById('fin-esp-stage-filter');
@@ -4606,21 +4610,29 @@ function renderFinance() {
   }
 
   // Show/hide sections based on role
-  document.getElementById('fin-esp-section').style.display   = isSuperAdmin ? '' : 'none';
-  document.getElementById('fin-divider-1').style.display      = isSuperAdmin ? '' : 'none';
-  document.getElementById('fin-client-section').style.display = (isSuperAdmin || isClient) ? '' : 'none';
-  document.getElementById('fin-divider-2').style.display      = isSuperAdmin ? '' : 'none';
-  document.getElementById('fin-petty-section').style.display  = isSuperAdmin ? '' : 'none';
+  document.getElementById('fin-esp-section').style.display   = (isSuperAdmin || isClientView) ? '' : 'none';
+  document.getElementById('fin-divider-1').style.display      = (isSuperAdmin || isClientView) ? '' : 'none';
+  document.getElementById('fin-client-section').style.display = (isSuperAdmin || isClientView) ? '' : 'none';
+  document.getElementById('fin-divider-2').style.display      = (isSuperAdmin || isClientView) ? '' : 'none';
+  document.getElementById('fin-petty-section').style.display  = (isSuperAdmin || isClientView) ? '' : 'none';
   const repriceBtn = document.getElementById('reprice-open-btn');
   if (repriceBtn) repriceBtn.style.display = isSuperAdmin ? '' : 'none';
 
-  if (isSuperAdmin) {
-    renderFinanceEsp();
-    renderFinancePetty();
+  // For client view: force outstanding-only in ESP and hide the toggle
+  const unpaidCb = document.getElementById('fin-esp-unpaid-only');
+  if (unpaidCb) {
+    const unpaidLabel = unpaidCb.closest('label');
+    if (unpaidLabel) unpaidLabel.style.display = isClientView ? 'none' : '';
+    if (isClientView) unpaidCb.checked = true;
   }
-  if (isSuperAdmin || isClient) {
-    renderFinanceClient();
-  }
+
+  // Petty cash entry form: hide for client view
+  const pettyForm = document.getElementById('fin-petty-entry-form');
+  if (pettyForm) pettyForm.style.display = isClientView ? 'none' : '';
+
+  renderFinanceEsp();
+  renderFinanceClient();
+  renderFinancePetty();
 }
 
 function renderFinanceEsp() {
@@ -4689,6 +4701,7 @@ function renderFinanceEsp() {
     return `<th>${i.label}<br><span style="font-weight:400;font-size:9px;opacity:0.7">${fmt(price)}/acct</span></th>`;
   }).join('');
 
+  const canManageBilling = APP_CONFIG.can('manage_finance');
   const bodyRows = rows.map(r => {
     const cells = activeItems.map(item => {
       const isTriggered = item.trigger(r);
@@ -4699,9 +4712,12 @@ function renderFinanceEsp() {
       }
       const btnCls  = isPaid ? 'paid' : 'unpaid';
       const btnTxt  = isPaid ? '✓ Paid' : 'Unpaid';
+      const statusEl = canManageBilling
+        ? `<button class="bill-paid-btn ${btnCls}" onclick="toggleBillPaid(${r._id},'${item.key}')">${btnTxt}</button>`
+        : `<span class="bill-paid-btn ${btnCls}" style="cursor:default">${btnTxt}</span>`;
       return `<td><div class="bill-cell">
         <span class="bill-amount triggered">${fmt(price)}</span>
-        <button class="bill-paid-btn ${btnCls}" onclick="toggleBillPaid(${r._id},'${item.key}')">${btnTxt}</button>
+        ${statusEl}
       </div></td>`;
     }).join('');
 
@@ -4839,10 +4855,11 @@ function renderFinancePetty() {
   const utilCls    = utilPct >= 90 ? 'danger' : utilPct >= 70 ? 'warn' : '';
   const remaining  = petty.balance - totalUsed;
 
+  const canManagePetty = APP_CONFIG.can('manage_finance');
   document.getElementById('fin-petty-balance').innerHTML = `
     <div class="pb-stat">
       <div class="pb-val">${fmt(petty.balance)}</div>
-      <div class="pb-lbl">Fund Balance <button class="btn btn-ghost" onclick="editPettyCashBalance()" style="font-size:10px;padding:2px 8px;margin-left:6px">Edit</button></div>
+      <div class="pb-lbl">Fund Balance ${canManagePetty ? '<button class="btn btn-ghost" onclick="editPettyCashBalance()" style="font-size:10px;padding:2px 8px;margin-left:6px">Edit</button>' : ''}</div>
     </div>
     <div class="pb-stat">
       <div class="pb-val" style="color:var(--red)">${fmt(totalUsed)}</div>
@@ -4884,7 +4901,7 @@ function renderFinancePetty() {
         <td>${e.date}</td>
         <td>${e.description || '—'}</td>
         <td>${fmt(e.amount)}</td>
-        <td><button class="petty-del-btn" onclick="deletePettyEntry(${e.id})" title="Delete">✕</button></td>
+        <td>${canManagePetty ? `<button class="petty-del-btn" onclick="deletePettyEntry(${e.id})" title="Delete">✕</button>` : ''}</td>
       </tr>`).join('');
 
     return `<div class="petty-ledger-section">
@@ -4893,13 +4910,13 @@ function renderFinancePetty() {
         <span>${fmt(monthTotal)}</span>
       </div>
       <table class="petty-table">
-        <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Description</th><th>Amount</th>${canManagePetty ? '<th></th>' : ''}</tr></thead>
         <tbody>${rowsHtml}</tbody>
         <tfoot>
           <tr class="petty-month-total">
             <td colspan="2">Monthly Total</td>
             <td>${fmt(monthTotal)}</td>
-            <td></td>
+            ${canManagePetty ? '<td></td>' : ''}
           </tr>
         </tfoot>
       </table>
@@ -4940,8 +4957,8 @@ function saveReprices() {
 // Finance print
 function printFinance() {
   const role = APP_CONFIG.getRole();
-  const isSuperAdmin = role === 'super_admin';
-  const isClient = role === 'client';
+  const isSuperAdmin = ['super_admin', 'sp_admin', 'sp_finance'].includes(role);
+  const isClient     = ['client_admin', 'client_finance'].includes(role);
   let html = `<html><head><title>Finance Report</title>
     <style>
       body { font-family:'DM Sans',sans-serif; font-size:11px; color:#111; margin:20px; }
@@ -4983,7 +5000,7 @@ function printFinance() {
     const accts = DB.filter(r => r.sale_status === 'for_transfer');
     function sumF(f) { return accts.reduce((s,r) => s + (parseFloat(r[f])||0), 0); }
     const grandTotal = CLIENT_FEE_ITEMS.reduce((s, item) => s + item.fields.reduce((ss, f) => ss + sumF(f), 0), 0);
-    html += '<h2>Client Fee Dashboard</h2>';
+    html += '<h2>Client Expenses Summary</h2>';
     html += '<table><thead><tr><th>Fee Category</th><th>Total</th></tr></thead><tbody>';
     CLIENT_FEE_ITEMS.forEach(item => {
       const tot = item.fields.reduce((s, f) => s + sumF(f), 0);
@@ -4993,7 +5010,7 @@ function printFinance() {
     html += '</tbody></table>';
   }
 
-  if (isSuperAdmin) {
+  if (isSuperAdmin || isClient) {
     html += '<h2>Petty Cash Tracker</h2>';
     const petty   = getPettyCash();
     const entries = getPettyEntries();
@@ -5085,11 +5102,13 @@ async function saveMyProfile(data) {
 
 function getRoleDisplay(role) {
   const map = {
-    viewer:      { label: 'Viewer',      color: '#6b7280', bg: '#f3f4f6' },
-    user:        { label: 'User',        color: '#2563eb', bg: '#eff6ff' },
-    client_admin:{ label: 'Client Admin',color: '#0d9488', bg: '#f0fdfa' },
-    sp_admin:    { label: 'SP Admin',    color: '#d97706', bg: '#fef3c7' },
-    super_admin: { label: 'Super Admin', color: '#7c3aed', bg: '#f5f3ff' },
+    viewer:        { label: 'Viewer',        color: '#6b7280', bg: '#f3f4f6' },
+    user:          { label: 'User',          color: '#2563eb', bg: '#eff6ff' },
+    client_admin:  { label: 'Client Admin',  color: '#0d9488', bg: '#f0fdfa' },
+    client_finance:{ label: 'Client Finance',color: '#059669', bg: '#ecfdf5' },
+    sp_admin:      { label: 'SP Admin',      color: '#d97706', bg: '#fef3c7' },
+    sp_finance:    { label: 'SP Finance',    color: '#b45309', bg: '#fffbeb' },
+    super_admin:   { label: 'Super Admin',   color: '#7c3aed', bg: '#f5f3ff' },
   };
   return map[role] || { label: role, color: '#6b7280', bg: '#f3f4f6' };
 }
@@ -5689,7 +5708,8 @@ async function renderAdminPanel() {
   const fiOptions = getFiOptions();
   const assignableRoles = [
     { value: 'viewer', label: 'Viewer' }, { value: 'user', label: 'User' },
-    { value: 'client_admin', label: 'Client Admin' }, { value: 'sp_admin', label: 'SP Admin' },
+    { value: 'client_admin', label: 'Client Admin' }, { value: 'client_finance', label: 'Client Finance' },
+    { value: 'sp_admin', label: 'SP Admin' }, { value: 'sp_finance', label: 'SP Finance' },
     { value: 'super_admin', label: 'Super Admin' },
   ];
   const rows = (profiles || []).map(p => {
