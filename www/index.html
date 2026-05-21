@@ -2426,9 +2426,9 @@ function persistState(id) {
 // HELPERS
 // ============================================================
 function getStage(r) {
-  if (r.bir_status === 'ecar_released') return 3; // ECAR Released
-  if (r.bir_entry_date)                return 2; // BIR Filed
-  if (r.cwt_date_paid)                 return 1; // Docketing
+  if (r.bir_status === 'ecar_released')       return 3; // ECAR Released
+  if (r.bir_entry_date)                       return 2; // BIR Filed
+  if (r.cwt_date_paid || r.sp_endorsed_date) return 1; // Docketing
   return 0;
 }
 const STAGE_LABELS = ['Not started', 'Docketing', 'BIR Filed', 'ECAR Released'];
@@ -2464,7 +2464,7 @@ function getTransmittalStatus(r) {
 // Each account belongs to exactly one stage — no double-counting.
 function getDashboardStage(r) {
   if (r.sale_status !== 'for_transfer') return null;
-  if (getTransmittalStatus(r) === 'fully_complied')    return 'fully_complied';
+  if (getTransmittalStatus(r) === 'fully_complied')     return 'fully_complied';
   if (getTransmittalStatus(r) === 'partially_complied') return 'partial_complied';
   if (isTaxDecReleased(r))  return 'taxdec_released';
   if (isCctReleased(r))     return 'cct_released';
@@ -2472,13 +2472,15 @@ function getDashboardStage(r) {
   if (isEcarReleased(r))    return 'ecar_released';
   if (isEcarProcessing(r))  return 'ecar_processing';
   if (isBirFullyPaid(r))    return 'taxes_paid';
-  return 'for_transfer';
+  if (r.sp_endorsed_date)   return 'docketing';
+  return 'not_started';
 }
 
 const CARD_FILTERS = {
   total_inventory:  r => true,
   for_transfer:     r => r.sale_status === 'for_transfer',
-  docketing:        r => getDashboardStage(r) === 'for_transfer',
+  not_started:      r => getDashboardStage(r) === 'not_started',
+  docketing:        r => getDashboardStage(r) === 'docketing',
   taxes_paid:       r => getDashboardStage(r) === 'taxes_paid',
   ecar_processing:  r => getDashboardStage(r) === 'ecar_processing',
   ecar_released:    r => getDashboardStage(r) === 'ecar_released',
@@ -2491,6 +2493,7 @@ const CARD_FILTERS = {
 const CARD_META = {
   total_inventory:  { title:'Total Inventory',            color:'var(--accent)',  cls:'accent' },
   for_transfer:     { title:'For Transfer',               color:'var(--amber)',   cls:'amber'  },
+  not_started:      { title:'Not Started',                color:'var(--muted)',   cls:'gray'   },
   docketing:        { title:'Docketing',                  color:'var(--muted)',   cls:'gray'   },
   taxes_paid:       { title:'Taxes Paid',                 color:'var(--green)',   cls:'green'  },
   ecar_processing:  { title:'ECAR Processing',            color:'#2563eb',        cls:'blue'   },
@@ -2659,7 +2662,8 @@ function renderDashboard() {
   // Card counts
   const canSummary = ['sp_admin','super_admin'].includes(role);
   const cardClick  = k => canSummary ? `onclick="openSummary('${k}')"` : '';
-  const nDocketing    = T.filter(r => getDashboardStage(r) === 'for_transfer').length;
+  const nNotStarted   = T.filter(r => getDashboardStage(r) === 'not_started').length;
+  const nDocketing    = T.filter(r => getDashboardStage(r) === 'docketing').length;
   const nTaxesPaid    = T.filter(r => getDashboardStage(r) === 'taxes_paid').length;
   const nEcarProc     = T.filter(r => getDashboardStage(r) === 'ecar_processing').length;
   const nEcarRel      = T.filter(r => getDashboardStage(r) === 'ecar_released').length;
@@ -2686,7 +2690,8 @@ function renderDashboard() {
 
   // Pipeline flow — one node per stage, connected left→right
   const PIPELINE_NODES = [
-    { key:'docketing',        label:'Docketing',          count:nDocketing,  color:'var(--muted)'  },
+    { key:'not_started',      label:'Not Started',         count:nNotStarted, color:'var(--muted)'  },
+    { key:'docketing',        label:'Docketing',           count:nDocketing,  color:'var(--amber)'  },
     { key:'taxes_paid',       label:'Taxes Paid',          count:nTaxesPaid,  color:'var(--green)'  },
     { key:'ecar_processing',  label:'eCAR Processing',     count:nEcarProc,   color:'#2563eb'       },
     { key:'ecar_released',    label:'eCAR Released',       count:nEcarRel,    color:'var(--purple)' },
@@ -2720,27 +2725,25 @@ function renderDashboard() {
     </div>
     <div class="completion-caption">${nFully} of ${total} for-transfer accounts are fully complied</div>`;
 
-  // Stage distribution (3-stage)
-  const stageCounts = STAGE_LABELS.map((_,i) => T.filter(r => getStage(r) === i).length);
-  const stageColors = ['var(--muted)','var(--amber)','var(--amber)','var(--green)'];
-  const distMax = Math.max(...stageCounts, 1);
+  // Stage distribution — full pipeline stages
+  const distMax = Math.max(...PIPELINE_NODES.map(s => s.count), 1);
   document.getElementById('stage-dist').innerHTML = `
     <div class="dist-card-title">Stage Distribution — Where are units right now?</div>
-    ${STAGE_LABELS.map((label,i) => `
+    ${PIPELINE_NODES.map(s => `
     <div class="dist-bar-row">
-      <div class="dist-bar-label">${label}</div>
-      <div class="dist-bar-wrap"><div class="dist-bar-fill" style="width:${pct(stageCounts[i],distMax)}%;background:${stageColors[i]}"></div></div>
-      <div class="dist-bar-num">${stageCounts[i]}</div>
+      <div class="dist-bar-label">${s.label}</div>
+      <div class="dist-bar-wrap"><div class="dist-bar-fill" style="width:${pct(s.count,distMax)}%;background:${s.color}"></div></div>
+      <div class="dist-bar-num">${s.count}</div>
     </div>`).join('')}`;
 
-  // Bottleneck — stage with most units currently stalled (stages 1-3)
-  let bnStage = 1, bnMax = 0;
-  for (let i = 1; i <= 3; i++) { if (stageCounts[i] > bnMax) { bnMax = stageCounts[i]; bnStage = i; } }
+  // Bottleneck — active stage (excluding Not Started and Fully Complied) with most units
+  const activeNodes = PIPELINE_NODES.slice(1, -1); // skip not_started and fully_complied
+  const bnNode = activeNodes.reduce((best, s) => s.count > best.count ? s : best, activeNodes[0]);
   document.getElementById('bottleneck-card').innerHTML = `
     <div class="bottleneck-title">Current Bottleneck</div>
-    <div class="bottleneck-stage">${STAGE_LABELS[bnStage]}</div>
-    <div class="bottleneck-count">${bnMax}</div>
-    <div class="bottleneck-desc">units at stage ${bnStage} — ${pct(bnMax,total)}% of all pipeline accounts</div>`;
+    <div class="bottleneck-stage">${bnNode.label}</div>
+    <div class="bottleneck-count">${bnNode.count}</div>
+    <div class="bottleneck-desc">units at this stage — ${pct(bnNode.count,total)}% of all pipeline accounts</div>`;
 
   // Bank breakdown
   const banks = {};
