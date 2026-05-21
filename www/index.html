@@ -802,6 +802,21 @@ canvas { width:100% !important; }
 .rpt-chart-wrap { width:100%; height:280px; position:relative; margin-bottom:4px; }
 
 /* FINANCE PAGE */
+.fin-subnav {
+  display:flex; gap:2px; border-bottom:2px solid var(--border);
+  margin-bottom:24px; overflow-x:auto;
+}
+.fin-tab {
+  font-size:12px; font-weight:600; padding:9px 18px;
+  border:none; background:none; cursor:pointer; white-space:nowrap;
+  color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-2px;
+  border-radius:4px 4px 0 0; transition:color 0.15s,border-color 0.15s;
+  font-family:var(--font);
+}
+.fin-tab:hover { color:var(--text); }
+.fin-tab.active { color:var(--accent2); border-bottom-color:var(--accent); background:var(--surface2); }
+.fin-scroll-wrap { max-height:440px; overflow:auto; }
+.finance-table thead th { position:sticky; top:0; z-index:1; }
 .finance-section { margin-bottom:32px; }
 .finance-section-header {
   display:flex; align-items:center; justify-content:space-between;
@@ -1727,7 +1742,7 @@ canvas { width:100% !important; }
   <div class="dash-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
     <div>
       <h1>Finance</h1>
-      <p>Billing tracker, client fee dashboard, and petty cash ledger</p>
+      <p>Billing tracker, client expenses, and petty cash ledger</p>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="reprice-open-btn" onclick="openRepriceModal()" style="display:none">⚙ Adjust Prices</button>
@@ -1735,7 +1750,14 @@ canvas { width:100% !important; }
     </div>
   </div>
 
-  <!-- ESP BILLING TRACKER (super_admin only) -->
+  <!-- Finance sub-navigation -->
+  <div id="fin-subnav" class="fin-subnav">
+    <button class="fin-tab active" data-tab="esp"    onclick="switchFinTab('esp')">ESP Billing Tracker</button>
+    <button class="fin-tab"        data-tab="client" onclick="switchFinTab('client')">Client Expenses Summary</button>
+    <button class="fin-tab"        data-tab="petty"  onclick="switchFinTab('petty')">Petty Cash Tracker</button>
+  </div>
+
+  <!-- ESP BILLING TRACKER -->
   <div id="fin-esp-section" class="finance-section">
     <div class="finance-section-header">
       <div>
@@ -1757,9 +1779,7 @@ canvas { width:100% !important; }
     </div>
   </div>
 
-  <hr class="finance-divider" id="fin-divider-1">
-
-  <!-- CLIENT FINANCE DASHBOARD -->
+  <!-- CLIENT EXPENSES SUMMARY -->
   <div id="fin-client-section" class="finance-section">
     <div class="finance-section-header">
       <div>
@@ -1773,9 +1793,7 @@ canvas { width:100% !important; }
     </div>
   </div>
 
-  <hr class="finance-divider" id="fin-divider-2">
-
-  <!-- PETTY CASH TRACKER (super_admin only) -->
+  <!-- PETTY CASH TRACKER -->
   <div id="fin-petty-section" class="finance-section">
     <div class="finance-section-header">
       <div>
@@ -4594,6 +4612,18 @@ function fmt(n) {
   return '₱' + parseFloat(n || 0).toLocaleString('en-PH', { minimumFractionDigits:2, maximumFractionDigits:2 });
 }
 
+let _activeFinTab = 'esp';
+function switchFinTab(tab) {
+  _activeFinTab = tab;
+  ['esp','client','petty'].forEach(t => {
+    const sec = document.getElementById(`fin-${t}-section`);
+    if (sec) sec.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('.fin-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+
 function renderFinance() {
   if (!APP_CONFIG.can('view_finance')) return;
   const role         = APP_CONFIG.getRole();
@@ -4609,12 +4639,6 @@ function renderFinance() {
     if (cur) stageFilter.value = cur;
   }
 
-  // Show/hide sections based on role
-  document.getElementById('fin-esp-section').style.display   = (isSuperAdmin || isClientView) ? '' : 'none';
-  document.getElementById('fin-divider-1').style.display      = (isSuperAdmin || isClientView) ? '' : 'none';
-  document.getElementById('fin-client-section').style.display = (isSuperAdmin || isClientView) ? '' : 'none';
-  document.getElementById('fin-divider-2').style.display      = (isSuperAdmin || isClientView) ? '' : 'none';
-  document.getElementById('fin-petty-section').style.display  = (isSuperAdmin || isClientView) ? '' : 'none';
   const repriceBtn = document.getElementById('reprice-open-btn');
   if (repriceBtn) repriceBtn.style.display = isSuperAdmin ? '' : 'none';
 
@@ -4633,6 +4657,9 @@ function renderFinance() {
   renderFinanceEsp();
   renderFinanceClient();
   renderFinancePetty();
+
+  // Re-apply active tab (renders all then hides non-active)
+  switchFinTab(_activeFinTab);
 }
 
 function renderFinanceEsp() {
@@ -4663,7 +4690,7 @@ function renderFinanceEsp() {
     });
   });
   const unpaidAmt  = totalBilled - totalPaid;
-  const paidPct    = totalItems ? Math.round(paidItems / totalItems * 100) : 0;
+  const paidPct    = totalBilled ? Math.round(totalPaid / totalBilled * 100) : 0;
 
   document.getElementById('fin-esp-kpis').innerHTML = `
     <div class="finance-kpi accent">
@@ -4749,8 +4776,8 @@ function renderFinanceEsp() {
   const grandPaid      = rows.reduce((s, r) => s + activeItems.reduce((ss, i) => ss + (i.trigger(r) && paid[`${r._id}_${i.key}`] ? getEspPrice(i.key) : 0), 0), 0);
 
   document.getElementById('fin-esp-table-wrap').innerHTML = `
-    <div style="overflow-x:auto">
-      <table class="finance-table">
+    <div class="fin-scroll-wrap">
+      <table class="finance-table" style="min-width:max-content;width:100%">
         <thead>
           <tr>
             <th>Unit Code</th>
