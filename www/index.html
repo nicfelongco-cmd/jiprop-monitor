@@ -873,6 +873,14 @@ canvas { width:100% !important; }
 .esp-batch-btn.unpaid { background:#fff3cd; color:#856404; border-color:#ffc107; }
 .fin-batchbar-hint { font-size:11px; color:var(--muted); }
 .esp-row-cb, #esp-select-all { width:15px; height:15px; cursor:pointer; accent-color:var(--accent2,#2563eb); }
+/* Field ownership color-coding (who fills the field) */
+#form-body input.fill-sp, #form-body select.fill-sp, #form-body textarea.fill-sp { border:1.5px solid #f5b800; }
+#form-body input.fill-client, #form-body select.fill-client, #form-body textarea.fill-client { border:1.5px solid #16a34a; }
+.fill-legend { display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin:4px 0 14px; padding:9px 14px; background:var(--surface2); border-radius:8px; font-size:12px; color:var(--muted); }
+.fill-legend-item { display:flex; align-items:center; gap:7px; }
+.fill-swatch { width:14px; height:14px; border-radius:3px; flex-shrink:0; }
+.fill-swatch.client { border:1.5px solid #16a34a; background:#16a34a22; }
+.fill-swatch.sp { border:1.5px solid #f5b800; background:#f5b80022; }
 .finance-kpi-row { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
 .finance-kpi {
   flex:1; min-width:130px; border:1.5px solid var(--border);
@@ -3608,6 +3616,11 @@ function renderEntryForm() {
     </div>
 
     <div class="form-body" id="form-body">
+      <div class="fill-legend">
+        <span style="font-weight:600;color:var(--text)">Field colors — who fills it in:</span>
+        <span class="fill-legend-item"><span class="fill-swatch client"></span> Client</span>
+        <span class="fill-legend-item"><span class="fill-swatch sp"></span> Service Provider</span>
+      </div>
       <!-- UNIT INFO -->
       <div class="form-section">
         <div class="form-section-title">Unit Information</div>
@@ -3673,13 +3686,13 @@ function renderEntryForm() {
           <div class="form-group">
             <label>Transfer Tax Amount</label>
             <div class="peso-wrap">
-              <input type="number" id="f_transfer_charge_amt" value="${r.transfer_charge_amt||''}"
+              <input type="number" id="f_transfer_charge_amt" class="fill-sp" value="${r.transfer_charge_amt||''}"
                 placeholder="0.00" step="0.01" min="0" oninput="updateTransferTaxStatus(${r._id})">
             </div>
           </div>
           <div class="form-group">
             <label>Transfer Tax Date Paid</label>
-            <input type="date" id="f_transfer_tax_date_paid" value="${r.transfer_tax_date_paid||''}"
+            <input type="date" id="f_transfer_tax_date_paid" class="fill-sp" value="${r.transfer_tax_date_paid||''}"
               placeholder="—" oninput="updateTransferTaxStatus(${r._id})">
           </div>
           ${transferTaxStatusBadge(r)}
@@ -3849,7 +3862,7 @@ function unitTypeField(r) {
   const manageLink = isSuperAdmin ? `<span class="fi-manage-link" onclick="openOptsModal('unit_type')">Manage list</span>` : '';
   return `<div class="form-group">
     <label>Unit Type ${manageLink}</label>
-    <select id="f_unit_type">${optsHtml}</select>
+    <select id="f_unit_type" class="fill-client">${optsHtml}</select>
   </div>`;
 }
 
@@ -3865,7 +3878,7 @@ function financialInstitutionField(r) {
     ? `<span class="fi-manage-link" onclick="openFiModal()">Manage list</span>` : '';
   return `<div class="form-group">
     <label>Financial Institution ${manageLink}</label>
-    <select id="f_financial_institution">${optsHtml}</select>
+    <select id="f_financial_institution" class="fill-client">${optsHtml}</select>
   </div>`;
 }
 
@@ -3880,23 +3893,43 @@ function transmittalStatusBadge(r) {
   return `<div class="transmittal-status ${cls}">${txt}</div>`;
 }
 
+// ── Field ownership color-coding ─────────────────────────────
+// Every entry field is filled by the Client (green) EXCEPT these, which are
+// filled by the Service Provider (yellow). Used to add a border-color class.
+const SP_FILL_FIELDS = new Set([
+  'doas_notarial_date',
+  'dst_fees', 'dst_date_paid',
+  'bir_entry_date', 'bir_status', 'ecar_release_date',
+  // Transfer Tax section
+  'rpt_fees', 'rpt_date_paid', 'tax_clearance_fees', 'tax_clearance_date_paid',
+  'transfer_charge_amt', 'transfer_tax_date_paid',
+  // CCT Transfer section
+  'rod_entry_date', 'epeb_fees', 'epeb_date_paid', 'epeb_status',
+  // Converted Condominium Certificate of Title section
+  'new_cct_under_buyer', 'cct_released_date',
+  // Tax Declaration section
+  'taxdec_entry_date', 'taxdec_inspection_fees', 'taxdec_status',
+  'converted_taxdec_buyer', 'taxdec_released_date',
+]);
+function fillClass(key) { return SP_FILL_FIELDS.has(key) ? 'fill-sp' : 'fill-client'; }
+
 function field(key, label, r, type, readonly, oninputFn) {
   return `<div class="form-group">
     <label>${label}</label>
-    <input type="${type}" id="f_${key}" value="${r[key] || ''}" ${readonly ? 'readonly style="opacity:0.5;cursor:not-allowed"' : ''} ${oninputFn ? `oninput="${oninputFn}"` : ''} placeholder="—">
+    <input type="${type}" id="f_${key}" class="${fillClass(key)}" value="${r[key] || ''}" ${readonly ? 'readonly style="opacity:0.5;cursor:not-allowed"' : ''} ${oninputFn ? `oninput="${oninputFn}"` : ''} placeholder="—">
   </div>`;
 }
 function textfield(key, label, r) {
   return `<div class="form-group wide">
     <label>${label}</label>
-    <textarea id="f_${key}">${r[key] || ''}</textarea>
+    <textarea id="f_${key}" class="${fillClass(key)}">${r[key] || ''}</textarea>
   </div>`;
 }
 function pesoField(key, label, r, oninputFn) {
   return `<div class="form-group">
     <label>${label}</label>
     <div class="peso-wrap">
-      <input type="number" id="f_${key}" value="${r[key] || ''}" placeholder="0.00" step="0.01" min="0" ${oninputFn ? `oninput="${oninputFn}"` : ''}>
+      <input type="number" id="f_${key}" class="${fillClass(key)}" value="${r[key] || ''}" placeholder="0.00" step="0.01" min="0" ${oninputFn ? `oninput="${oninputFn}"` : ''}>
     </div>
   </div>`;
 }
@@ -3906,7 +3939,7 @@ function selectField(key, label, r, options) {
   ).join('');
   return `<div class="form-group">
     <label>${label}</label>
-    <select id="f_${key}">${opts}</select>
+    <select id="f_${key}" class="${fillClass(key)}">${opts}</select>
   </div>`;
 }
 function birStatusField(r) {
@@ -3923,7 +3956,7 @@ function birStatusField(r) {
   const hint = !allChecked ? '<div class="form-hint">Complete all 21 checklist items to enable "Submitted"</div>' : '';
   return `<div class="form-group">
     <label>BIR Application Status</label>
-    <select id="f_bir_status">${optsHtml}</select>
+    <select id="f_bir_status" class="fill-sp">${optsHtml}</select>
     ${hint}
   </div>`;
 }
@@ -3999,7 +4032,7 @@ function renderUnitCodeField(r) {
 
   return `<div class="form-group">
     <label>Unit Code</label>
-    <input type="text" id="f_unit_code" value="${cur}" readonly style="opacity:0.5;cursor:not-allowed" placeholder="—">
+    <input type="text" id="f_unit_code" class="fill-client" value="${cur}" readonly style="opacity:0.5;cursor:not-allowed" placeholder="—">
     ${actionHtml}
   </div>`;
 }
