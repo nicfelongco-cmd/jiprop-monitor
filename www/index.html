@@ -866,6 +866,13 @@ canvas { width:100% !important; }
 .bill-paid-btn.paid { background:#d4edda; color:#155724; border-color:#b2dfbd; }
 .bill-paid-btn.unpaid { background:#fff3cd; color:#856404; border-color:#ffc107; }
 .bill-paid-btn.not-triggered { background:var(--surface2); color:#ccc; border-color:var(--border); cursor:default; }
+.fin-batchbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 4px 14px; }
+.esp-batch-btn { font-size:11px; padding:5px 12px; border-radius:6px; border:1px solid var(--border); cursor:pointer; font-family:var(--font); font-weight:600; background:var(--surface); transition:opacity 0.15s; }
+.esp-batch-btn:disabled { opacity:0.45; cursor:not-allowed; }
+.esp-batch-btn.paid   { background:#d4edda; color:#155724; border-color:#b2dfbd; }
+.esp-batch-btn.unpaid { background:#fff3cd; color:#856404; border-color:#ffc107; }
+.fin-batchbar-hint { font-size:11px; color:var(--muted); }
+.esp-row-cb, #esp-select-all { width:15px; height:15px; cursor:pointer; accent-color:var(--accent2,#2563eb); }
 .finance-kpi-row { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
 .finance-kpi {
   flex:1; min-width:130px; border:1.5px solid var(--border);
@@ -1573,6 +1580,7 @@ canvas { width:100% !important; }
     <button class="nav-tab" id="summary-nav-tab" style="display:none" onclick="switchView('summary')">Summary</button>
     <button class="nav-tab" onclick="switchView('report')">Reporting</button>
     <button class="nav-tab" id="finance-nav-tab" style="display:none" onclick="switchView('finance')">Finance</button>
+    <button class="nav-tab" id="resources-nav-tab" onclick="switchView('resources')">Resources</button>
   </div>
   <div class="nav-right">
     <button class="admin-btn" id="admin-nav-btn" onclick="openAdminPanel()">⚙ Admin</button>
@@ -1624,6 +1632,9 @@ canvas { width:100% !important; }
   <button class="ham-item" id="ham-tab-finance" style="display:none" onclick="switchView('finance');closeHamburger()">
     <span class="ham-item-icon">💰</span> Finance
   </button>
+  <button class="ham-item" id="ham-tab-resources" onclick="switchView('resources');closeHamburger()">
+    <span class="ham-item-icon">📁</span> Resources
+  </button>
   <div class="ham-divider"></div>
   <button class="ham-item" id="ham-admin-item" style="display:none" onclick="openAdminPanel();closeHamburger()">
     <span class="ham-item-icon">⚙</span> Admin
@@ -1663,6 +1674,12 @@ canvas { width:100% !important; }
       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clip-rule="evenodd"/>
     </svg>
     <span>Finance</span>
+  </button>
+  <button class="mobile-tab" id="mtab-resources" onclick="switchView('resources')">
+    <svg class="mtab-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path d="M2 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V5z"/>
+    </svg>
+    <span>Resources</span>
   </button>
 </nav>
 
@@ -1825,6 +1842,24 @@ canvas { width:100% !important; }
     </div>
     <div id="fin-petty-ledger"></div>
   </div>
+</div>
+
+<!-- RESOURCES VIEW -->
+<style>
+  .resource-cat { border:1px solid var(--border); border-radius:12px; background:var(--surface); padding:18px 20px; margin-bottom:18px; }
+  .resource-cat-head { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; }
+  .resource-cat-icon { width:40px; height:40px; border-radius:9px; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .resource-cat-title { font-size:14px; font-weight:700; color:var(--text); }
+  .resource-cat-desc { font-size:12px; color:var(--muted); margin-top:2px; }
+</style>
+<div class="view" id="view-resources">
+  <div class="dash-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
+    <div>
+      <h1>Resources</h1>
+      <p id="resources-subtitle">Templates, forms, and reference materials shared with the client</p>
+    </div>
+  </div>
+  <div id="resources-content" style="margin-top:8px"></div>
 </div>
 
 <!-- Admin Panel -->
@@ -2148,8 +2183,8 @@ const APP_CONFIG = {
     notifications:   false,  // stub — email/push alerts on stage advance
   },
   roles: {
-    super_admin:   { label: 'Super Admin',   can: ['read','write','upload','delete','export','view_finance','manage_finance','approve_reversals','generate_reports','edit_locked_fields','manage_user_accounts','manage_accounts'] },
-    sp_admin:      { label: 'SP Admin',      can: ['read','write','upload','delete','export','view_finance','manage_finance','approve_reversals','generate_reports'] },
+    super_admin:   { label: 'Super Admin',   can: ['read','write','upload','delete','export','view_finance','manage_finance','approve_reversals','generate_reports','edit_locked_fields','manage_user_accounts','manage_accounts','delete_accounts','manage_resources'] },
+    sp_admin:      { label: 'SP Admin',      can: ['read','write','upload','delete','export','view_finance','manage_finance','approve_reversals','generate_reports','manage_resources'] },
     sp_finance:    { label: 'SP Finance',    can: ['read','view_finance','manage_finance','approve_reversals'] },
     client_admin:  { label: 'Client Admin',  can: ['read','write','upload','export','view_finance','generate_reports'] },
     client_finance:{ label: 'Client Finance',can: ['read','view_finance'] },
@@ -2515,7 +2550,7 @@ function switchView(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
   document.getElementById('view-' + v).classList.add('active');
-  const labels = { dashboard:'dashboard', entry:'entry', report:'reporting', summary:'summary', finance:'finance' };
+  const labels = { dashboard:'dashboard', entry:'entry', report:'reporting', summary:'summary', finance:'finance', resources:'resources' };
   document.querySelectorAll('.nav-tab').forEach(el => {
     if (el.textContent.trim().toLowerCase() === (labels[v] || v)) el.classList.add('active');
   });
@@ -2534,6 +2569,7 @@ function switchView(v) {
   if (v === 'report')    renderReport();
   if (v === 'summary')   renderSummary();
   if (v === 'finance')   renderFinance();
+  if (v === 'resources') renderResources();
 }
 
 // ── Summary view ─────────────────────────────────────────────
@@ -2984,6 +3020,96 @@ async function deleteDocFile(unitId, docType, idx) {
   if (!confirm('Remove this file?')) return;
   await idbRemoveFile(unitId, docType, idx);
   refreshDocSlot(unitId, docType);
+}
+
+// ============================================================
+// RESOURCES — shared template/resource library (client-facing)
+// Stored in the same `documents` table/bucket under a reserved
+// unit id, with the resource category held in the doc_type field.
+// ============================================================
+const RESOURCES_UNIT = '__resources__';
+const RESOURCE_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip,.csv,.txt';
+const RESOURCE_CATEGORIES = [
+  { key: 'templates', icon: '📝', label: 'Templates',        desc: 'Editable document templates and standard forms' },
+  { key: 'guides',    icon: '📘', label: 'Guides & SOPs',    desc: 'Process guides and standard operating procedures' },
+  { key: 'govforms',  icon: '🏛', label: 'Government Forms',  desc: 'BIR, Registry of Deeds, and LGU forms' },
+  { key: 'other',     icon: '📎', label: 'Other Resources',  desc: 'Reference files and miscellaneous downloads' },
+];
+
+async function renderResources() {
+  const wrap = document.getElementById('resources-content');
+  if (!wrap) return;
+  const canManage = APP_CONFIG.can('manage_resources');
+  const sub = document.getElementById('resources-subtitle');
+  if (sub) sub.textContent = canManage
+    ? 'Upload templates and reference materials to make them available to the client'
+    : 'Templates, forms, and reference materials shared with you';
+
+  wrap.innerHTML = RESOURCE_CATEGORIES.map(c => `
+    <div class="resource-cat">
+      <div class="resource-cat-head">
+        <div class="resource-cat-icon">${c.icon}</div>
+        <div>
+          <div class="resource-cat-title">${c.label}</div>
+          <div class="resource-cat-desc">${c.desc}</div>
+        </div>
+      </div>
+      ${canManage ? `<label class="doc-upload-area" for="res-inp-${c.key}">
+        <input type="file" id="res-inp-${c.key}" accept="${RESOURCE_ACCEPT}" multiple
+               onchange="handleResourceUpload(this,'${c.key}')">
+        <span class="doc-upload-icon">+ Upload</span>
+        <span class="doc-upload-label">click to browse (${RESOURCE_ACCEPT})</span>
+      </label>` : ''}
+      <div class="doc-file-list" id="res-files-${c.key}"><span class="doc-loading">Loading…</span></div>
+    </div>`).join('');
+
+  RESOURCE_CATEGORIES.forEach(c => refreshResourceList(c.key));
+}
+
+async function refreshResourceList(category) {
+  const el = document.getElementById('res-files-' + category);
+  if (!el) return;
+  const canManage = APP_CONFIG.can('manage_resources');
+  const files = await idbGetFiles(RESOURCES_UNIT, category);
+  if (!files.length) { el.innerHTML = '<span class="doc-empty">No resources available yet</span>'; return; }
+  el.innerHTML = files.map((f, i) => {
+    const ext  = (f.name.split('.').pop() || '').toLowerCase();
+    const date = f.uploadedAt ? new Date(f.uploadedAt).toLocaleDateString('en-PH') : '';
+    const size = f.size < 1048576 ? (f.size/1024).toFixed(1)+' KB' : (f.size/1048576).toFixed(1)+' MB';
+    const canView = f.type && (f.type.includes('pdf') || f.type.includes('image'));
+    return `<div class="doc-file-item">
+      <span class="doc-file-ext">${ext}</span>
+      <span class="doc-file-name" title="${f.name}">${f.name}</span>
+      <span class="doc-file-meta">${size} · ${date}</span>
+      ${canView ? `<button class="doc-file-btn" onclick="viewDoc('${RESOURCES_UNIT}','${category}',${i})" title="View">View</button>` : ''}
+      <button class="doc-file-btn" onclick="downloadDoc('${RESOURCES_UNIT}','${category}',${i})" title="Download">↓</button>
+      ${canManage ? `<button class="doc-file-btn danger" onclick="deleteResource('${category}',${i})" title="Remove">×</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function handleResourceUpload(input, category) {
+  if (!APP_CONFIG.can('manage_resources')) return;
+  const results = [];
+  for (const file of Array.from(input.files)) {
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+      results.push({ name: file.name, ok: false, msg: `Exceeds ${MAX_FILE_MB} MB limit` });
+      continue;
+    }
+    try { await idbAddFile(RESOURCES_UNIT, category, file); results.push({ name: file.name, ok: true }); }
+    catch (e) { results.push({ name: file.name, ok: false, msg: e.message || 'Upload failed' }); }
+  }
+  input.value = '';
+  await refreshResourceList(category);
+  const fails = results.filter(r => !r.ok);
+  if (fails.length) alert('Some uploads failed:\n' + fails.map(r => `• ${r.name}: ${r.msg}`).join('\n'));
+}
+
+async function deleteResource(category, idx) {
+  if (!APP_CONFIG.can('manage_resources')) return;
+  if (!confirm('Remove this resource? Clients will no longer be able to access it.')) return;
+  await idbRemoveFile(RESOURCES_UNIT, category, idx);
+  refreshResourceList(category);
 }
 
 async function loadAllDocSlots(unitId) {
@@ -4563,7 +4689,60 @@ function toggleBillPaid(unitId, itemKey) {
   const k    = `${unitId}_${itemKey}`;
   paid[k]    = !paid[k];
   saveFinancePaid(paid);
-  renderFinance();
+  // Re-render only the ESP tracker (not the whole Finance view) and preserve
+  // the table's scroll position so the clicked row stays where it is.
+  renderFinanceEsp();
+}
+
+// Batch paid/unpaid selection state (set of unit ids, as strings)
+let _espSelected = new Set();
+
+function toggleEspRowSelect(id, checked) {
+  if (checked) _espSelected.add(String(id)); else _espSelected.delete(String(id));
+  updateEspBatchBar();
+}
+
+function toggleEspSelectAll(checked) {
+  document.querySelectorAll('#fin-esp-table-wrap .esp-row-cb').forEach(cb => {
+    cb.checked = checked;
+    if (checked) _espSelected.add(cb.dataset.id); else _espSelected.delete(cb.dataset.id);
+  });
+  updateEspBatchBar();
+}
+
+function clearEspSelection() {
+  _espSelected.clear();
+  renderFinanceEsp();
+}
+
+function updateEspBatchBar() {
+  const countEl = document.getElementById('esp-batch-count');
+  if (countEl) countEl.textContent = _espSelected.size;
+  document.querySelectorAll('.esp-batch-btn').forEach(b => b.disabled = _espSelected.size === 0);
+  const selAll = document.getElementById('esp-select-all');
+  if (selAll) {
+    const cbs = Array.from(document.querySelectorAll('#fin-esp-table-wrap .esp-row-cb'));
+    selAll.checked = cbs.length > 0 && cbs.every(cb => cb.checked);
+  }
+}
+
+function markSelectedEspPaid(makePaid) {
+  if (!APP_CONFIG.can('manage_finance')) return;
+  if (!_espSelected.size) return;
+  const stageFilter = (document.getElementById('fin-esp-stage-filter')?.value || '').trim();
+  const activeItems = stageFilter ? ESP_ITEMS.filter(i => i.key === stageFilter) : ESP_ITEMS;
+  const scopeLabel  = stageFilter ? `the "${ESP_ITEMS.find(i => i.key === stageFilter)?.label}" billing item` : 'all billing items';
+  if (!confirm(`Mark ${scopeLabel} as ${makePaid ? 'PAID' : 'UNPAID'} for ${_espSelected.size} selected account${_espSelected.size !== 1 ? 's' : ''}?`)) return;
+  const paid = getFinancePaid();
+  _espSelected.forEach(id => {
+    const r = DB.find(u => String(u._id) === String(id));
+    if (!r) return;
+    activeItems.forEach(item => {
+      if (item.trigger(r)) paid[`${r._id}_${item.key}`] = makePaid;
+    });
+  });
+  saveFinancePaid(paid);
+  renderFinanceEsp();
 }
 
 function getPettyCash() { return _cache.pettyCash || { balance: 200000 }; }
@@ -4670,6 +4849,7 @@ function renderFinanceEsp() {
   const unpaidOnly  = document.getElementById('fin-esp-unpaid-only')?.checked || false;
 
   const paid  = getFinancePaid();
+  const canManageBilling = APP_CONFIG.can('manage_finance');
   const accts = DB.filter(r => r.sale_status === 'for_transfer');
 
   // Only show accounts that have at least one triggered billing item
@@ -4679,6 +4859,10 @@ function renderFinanceEsp() {
   const rows = unpaidOnly
     ? triggered.filter(r => ESP_ITEMS.some(i => i.trigger(r) && !paid[`${r._id}_${i.key}`]))
     : triggered;
+
+  // Drop any selected rows that are no longer visible (e.g. filtered out)
+  const visibleIds = new Set(rows.map(r => String(r._id)));
+  _espSelected.forEach(id => { if (!visibleIds.has(id)) _espSelected.delete(id); });
 
   // KPIs
   let totalBilled = 0, totalPaid = 0, totalItems = 0, paidItems = 0;
@@ -4731,7 +4915,6 @@ function renderFinanceEsp() {
     return `<th>${i.label}<br><span style="font-weight:400;font-size:9px;opacity:0.7">${fmt(price)}/acct</span></th>`;
   }).join('');
 
-  const canManageBilling = APP_CONFIG.can('manage_finance');
   const bodyRows = rows.map(r => {
     const cells = activeItems.map(item => {
       const isTriggered = item.trigger(r);
@@ -4743,13 +4926,17 @@ function renderFinanceEsp() {
       const btnCls  = isPaid ? 'paid' : 'unpaid';
       const btnTxt  = isPaid ? '✓ Paid' : 'Unpaid';
       const statusEl = canManageBilling
-        ? `<button class="bill-paid-btn ${btnCls}" onclick="toggleBillPaid(${r._id},'${item.key}')">${btnTxt}</button>`
+        ? `<button class="bill-paid-btn ${btnCls}" onclick="toggleBillPaid('${r._id}','${item.key}')">${btnTxt}</button>`
         : `<span class="bill-paid-btn ${btnCls}" style="cursor:default">${btnTxt}</span>`;
       return `<td><div class="bill-cell">
         <span class="bill-amount triggered">${fmt(price)}</span>
         ${statusEl}
       </div></td>`;
     }).join('');
+
+    const selectCell = canManageBilling
+      ? `<td style="text-align:center"><input type="checkbox" class="esp-row-cb" data-id="${r._id}" ${_espSelected.has(String(r._id)) ? 'checked' : ''} onchange="toggleEspRowSelect('${r._id}',this.checked)"></td>`
+      : '';
 
     const rowTotal = activeItems.reduce((s, item) => {
       return s + (item.trigger(r) ? getEspPrice(item.key) : 0);
@@ -4759,6 +4946,7 @@ function renderFinanceEsp() {
     }, 0);
 
     return `<tr>
+      ${selectCell}
       <td>${r.unit_code || '—'}</td>
       <td>${r.present_buyer || '—'}</td>
       ${cells}
@@ -4778,11 +4966,35 @@ function renderFinanceEsp() {
   const grandTotal     = rows.reduce((s, r) => s + activeItems.reduce((ss, i) => ss + (i.trigger(r) ? getEspPrice(i.key) : 0), 0), 0);
   const grandPaid      = rows.reduce((s, r) => s + activeItems.reduce((ss, i) => ss + (i.trigger(r) && paid[`${r._id}_${i.key}`] ? getEspPrice(i.key) : 0), 0), 0);
 
+  // Batch toolbar + table-head selection cell (managers only)
+  const n = _espSelected.size;
+  const selectAllChecked = canManageBilling && rows.length && rows.every(r => _espSelected.has(String(r._id)));
+  const selectHeader = canManageBilling
+    ? `<th style="text-align:center"><input type="checkbox" id="esp-select-all" ${selectAllChecked ? 'checked' : ''} onchange="toggleEspSelectAll(this.checked)" title="Select all"></th>`
+    : '';
+  const batchBar = canManageBilling ? `
+    <div class="fin-batchbar">
+      <span><strong id="esp-batch-count">${n}</strong> selected</span>
+      <button class="esp-batch-btn paid"   ${n ? '' : 'disabled'} onclick="markSelectedEspPaid(true)">✓ Mark Paid</button>
+      <button class="esp-batch-btn unpaid" ${n ? '' : 'disabled'} onclick="markSelectedEspPaid(false)">Mark Unpaid</button>
+      <button class="esp-batch-btn"        ${n ? '' : 'disabled'} onclick="clearEspSelection()">Clear</button>
+      <span class="fin-batchbar-hint">Applies to ${stageFilter ? 'the filtered billing item' : 'all triggered billing items'} of the selected accounts</span>
+    </div>` : '';
+  const footColspan = canManageBilling ? 3 : 2;
+
+  // Preserve the table's scroll position across re-render (so clicking a
+  // Paid/Unpaid toggle deep in the list does not jump back to the top).
+  const oldWrap  = document.querySelector('#fin-esp-table-wrap .fin-scroll-wrap');
+  const savedTop = oldWrap ? oldWrap.scrollTop : 0;
+  const savedLeft= oldWrap ? oldWrap.scrollLeft : 0;
+
   document.getElementById('fin-esp-table-wrap').innerHTML = `
+    ${batchBar}
     <div class="fin-scroll-wrap">
       <table class="finance-table" style="min-width:max-content;width:100%">
         <thead>
           <tr>
+            ${selectHeader}
             <th>Unit Code</th>
             <th>Buyer</th>
             ${headerCols}
@@ -4793,7 +5005,7 @@ function renderFinanceEsp() {
         <tbody>${bodyRows}</tbody>
         <tfoot>
           <tr class="finance-subtotal">
-            <td colspan="2">Column Totals (${rows.length} accounts)</td>
+            <td colspan="${footColspan}">Column Totals (${rows.length} accounts)</td>
             ${colTotals}
             <td style="font-weight:700">${fmt(grandTotal)}</td>
             <td style="color:var(--amber)">${fmt(grandTotal - grandPaid)} outstanding</td>
@@ -4801,6 +5013,9 @@ function renderFinanceEsp() {
         </tfoot>
       </table>
     </div>`;
+
+  const newWrap = document.querySelector('#fin-esp-table-wrap .fin-scroll-wrap');
+  if (newWrap) { newWrap.scrollTop = savedTop; newWrap.scrollLeft = savedLeft; }
 }
 
 function renderFinanceClient() {
@@ -5772,7 +5987,7 @@ async function renderAdminPanel() {
       <td><select class="admin-role-select" onchange="changeUserRole('${p.username}',this.value)">${roleOpts}</select></td>
       <td>${showFi ? `<select class="admin-fi-select" onchange="changeUserFi('${p.username}',this.value)">${fiOpts}</select>` : '<span style="font-size:11px;color:var(--muted)">—</span>'}</td>
       ${statusCell}
-      <td style="display:flex;gap:4px;flex-wrap:wrap">${editBtn}${restrictBtn}${!isMe ? `<button class="admin-delete-btn" onclick="deleteUser('${p.username}')">Delete</button>` : ''}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">${editBtn}${restrictBtn}${!isMe && APP_CONFIG.can('delete_accounts') ? `<button class="admin-delete-btn" onclick="deleteUser('${p.username}')">Delete</button>` : ''}</td>
     </tr>`;
   }).join('');
   const statusHeader = isSuperAdmin ? 'Status / Last Login' : 'Status';
@@ -5836,11 +6051,30 @@ async function restoreUser(username) {
 }
 
 async function deleteUser(username) {
-  if (!confirm(`Permanently delete account "${username}"? This cannot be undone.`)) return;
-  const { data } = await _sb.from('user_profiles').select('user_id').eq('username', username).single();
-  if (data) {
-    await _sb.from('user_profiles').delete().eq('username', username);
-    // Note: deleting the auth user requires service-role key; profile deletion is sufficient for access control
+  if (!APP_CONFIG.can('delete_accounts')) { alert('Only a Super Admin can delete accounts.'); return; }
+  if (username === _currentUser.username) { alert('You cannot delete your own account.'); return; }
+  if (!confirm(`Permanently delete account "${username}"?\n\nThis removes the user's login and profile and cannot be undone.`)) return;
+
+  const { data: { session } } = await _sb.auth.getSession();
+  let res, resJson;
+  try {
+    res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ username }),
+    });
+    resJson = await res.json();
+  } catch (e) {
+    alert('Network error: ' + String(e));
+    return;
+  }
+  if (!res.ok || resJson?.error) {
+    alert('Delete failed: ' + (resJson?.error || 'Unknown error'));
+    return;
   }
   renderAdminPanel();
 }
