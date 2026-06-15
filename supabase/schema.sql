@@ -121,11 +121,14 @@ alter table public.documents          enable row level security;
 drop policy if exists "units_read"   on public.units;
 drop policy if exists "units_write"  on public.units;
 drop policy if exists "units_update" on public.units;
+drop policy if exists "units_delete" on public.units;
 create policy "units_read"   on public.units for select to authenticated using (true);
 create policy "units_write"  on public.units for insert to authenticated
   with check (public.my_role() in ('user','client_admin','sp_admin','super_admin'));
 create policy "units_update" on public.units for update to authenticated
   using (public.my_role() in ('user','client_admin','sp_admin','super_admin'));
+create policy "units_delete" on public.units for delete to authenticated
+  using (public.my_role() = 'super_admin');
 
 -- user_profiles
 drop policy if exists "profiles_read"  on public.user_profiles;

@@ -3420,6 +3420,42 @@ function selectUnit(id) {
   document.querySelector('.entry-layout')?.classList.add('unit-open');
 }
 
+// Permanently delete an account/unit (Super Admin only). Removes the unit
+// record plus any documents it owns (storage files + rows), then updates the
+// local list. Note: `units` needs a delete RLS policy for super_admin.
+async function deleteAccount(id) {
+  if (APP_CONFIG.getRole() !== 'super_admin') { alert('Only a Super Admin can delete accounts.'); return; }
+  const r = DB.find(u => String(u._id) === String(id));
+  if (!r) return;
+  const label = `${r.unit_code || '(no code)'}${r.present_buyer ? ' — ' + r.present_buyer : ''}`;
+  if (!confirm(`Permanently delete this account?\n\n${label}\n\nThis removes the unit record and every document uploaded to it. This cannot be undone.`)) return;
+
+  // Clean up documents owned by this unit (storage objects + table rows)
+  try {
+    const { data: docs } = await _sb.from('documents').select('id,storage_path').eq('unit_id', String(id));
+    const paths = (docs || []).map(d => d.storage_path).filter(Boolean);
+    if (paths.length) await _sb.storage.from(DOC_BUCKET).remove(paths);
+    if (docs && docs.length) await _sb.from('documents').delete().eq('unit_id', String(id));
+  } catch (e) { console.error('Document cleanup failed:', e); }
+
+  // Cancel any pending auto-save for this unit so it can't re-create the row
+  if (typeof _persistTimers !== 'undefined' && _persistTimers[id]) {
+    clearTimeout(_persistTimers[id]); delete _persistTimers[id];
+  }
+
+  const { error } = await _sb.from('units').delete().eq('id', String(id));
+  if (error) { alert('Delete failed: ' + error.message); return; }
+
+  // Remove from the in-memory list and clear the form
+  const idx = DB.findIndex(u => String(u._id) === String(id));
+  if (idx >= 0) DB.splice(idx, 1);
+  if (String(selectedId) === String(id)) selectedId = null;
+  filterUnits();
+  const main = document.getElementById('entry-main');
+  if (main) main.innerHTML = `<div style="padding:60px 24px;text-align:center;color:var(--muted);font-size:13px">Account deleted. Select another account from the list.</div>`;
+  document.querySelector('.entry-layout')?.classList.remove('unit-open');
+}
+
 function renderEndorsedBanner(r) {
   const isSuperAdmin = APP_CONFIG.getRole() === 'super_admin';
   const isEndorsed   = !!r.sp_endorsed_date;
@@ -3535,6 +3571,9 @@ function renderEntryForm() {
           <button class="status-btn ${r.sale_status==='for_transfer'?'active-transfer':''}" onclick="changeStatus(${r._id},'for_transfer')">For Transfer</button>
         </div>
         <button class="btn btn-ghost" onclick="renderDashboard();switchView('dashboard')">View in Dashboard</button>
+        ${APP_CONFIG.getRole() === 'super_admin'
+          ? `<button class="btn btn-ghost" style="color:var(--red,#dc2626);border-color:#f0c2c2" onclick="deleteAccount('${r._id}')">🗑 Delete Account</button>`
+          : ''}
       </div>
     </div>
 
