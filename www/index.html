@@ -2145,6 +2145,7 @@ async function _initAppData() {
     const { data } = await _sb.from('reversal_requests').select('*').order('created_at', { ascending: false });
     _reversalCache = data || [];
     renderNotificationBell();
+    renderNotifPanelBody();
   }).subscribe();
 
   filteredUnits = [...DB];
@@ -5850,12 +5851,27 @@ const PROTECTED_FIELDS = new Set([
 
 function getReversalRequests() { return _reversalCache; }
 
-function submitReversalRequest(unitId, fieldKey, oldValue, newValue, requestedBy) {
+async function submitReversalRequest(unitId, fieldKey, oldValue, newValue, requestedBy) {
   const id = Date.now() + '_' + Math.random().toString(36).slice(2);
   const req = { id, unit_id: String(unitId), field_key: fieldKey, old_value: String(oldValue), new_value: String(newValue), requested_by: requestedBy, status: 'pending', created_at: new Date().toISOString() };
+  // Optimistically show it, but confirm it actually persisted so the Super Admin
+  // really receives it. If the insert is rejected (e.g. RLS/role/network), we must
+  // NOT leave the requester believing it was sent.
   _reversalCache.unshift(req);
-  _sb.from('reversal_requests').insert(req).catch(console.error);
   renderNotificationBell();
+  const { error } = await _sb.from('reversal_requests').insert(req);
+  if (error) {
+    const i = _reversalCache.findIndex(r => r.id === id);
+    if (i >= 0) _reversalCache.splice(i, 1);   // roll back the optimistic entry
+    renderNotificationBell();
+    renderNotifPanelBody();
+    console.error('Reversal request failed to save:', error);
+    alert('Your request could NOT be sent for approval.\n\n' +
+          (error.message || 'A permission or connection error occurred.') +
+          '\n\nNothing was submitted — please try again or contact your administrator.');
+    return false;
+  }
+  return true;
 }
 
 function approveReversal(reqId) {

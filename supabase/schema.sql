@@ -153,7 +153,7 @@ drop policy if exists "reversals_insert" on public.reversal_requests;
 drop policy if exists "reversals_update" on public.reversal_requests;
 create policy "reversals_read"   on public.reversal_requests for select to authenticated using (true);
 create policy "reversals_insert" on public.reversal_requests for insert to authenticated
-  with check (public.my_role() in ('user','client_admin','sp_admin','super_admin'));
+  with check (public.my_role() in ('user','client_admin','client_finance','sp_finance','sp_admin','super_admin'));
 create policy "reversals_update" on public.reversal_requests for update to authenticated
   using (public.my_role() in ('sp_admin','super_admin'));
 
