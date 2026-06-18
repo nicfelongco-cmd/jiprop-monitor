@@ -4071,28 +4071,39 @@ async function submitCodeChangeRequest() {
   if (!newCode) { alert('Please enter the new unit code.'); return; }
   if (newCode === curCode) { alert('The new code is the same as the current code.'); return; }
 
-  const unitId = _ccTargetUnitId;
-  const btn    = document.getElementById('cc-submit-btn');
+  const unitId   = _ccTargetUnitId;
+  const isAdmin  = _ccIsAdmin;
+  const btn      = document.getElementById('cc-submit-btn');
+  const btnLabel = isAdmin ? 'Apply Change' : 'Submit Request';
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
-  if (_ccIsAdmin) {
-    // SP Admin: apply directly and record as approved
-    const record = DB.find(u => u._id === (isNaN(unitId) ? unitId : Number(unitId)));
-    if (record) { record.unit_code = newCode; persistState(record._id); }
-    const id  = Date.now() + '_' + Math.random().toString(36).slice(2);
-    const req = { id, unit_id: String(unitId), field_key: 'unit_code', old_value: curCode, new_value: newCode,
-                  requested_by: _currentUser?.username || '', status: 'approved', created_at: new Date().toISOString() };
-    _reversalCache.unshift(req);
-    await _sb.from('reversal_requests').insert(req).catch(console.error);
-    closeCodeChangeModal();
-    renderEntryForm();
-  } else {
-    const username = _currentUser?.username || '';
-    submitReversalRequest(unitId, 'unit_code', curCode, newCode, username);
+  // NOTE: never call .catch() on a Supabase query builder — it is a thenable
+  // that has no .catch(), so doing so throws synchronously and would leave the
+  // modal stuck on "Saving…". Use await + error check inside try/finally so the
+  // button and modal are always restored, success or failure.
+  try {
+    if (isAdmin) {
+      // SP Admin / Super Admin: apply directly and record as approved
+      const record = DB.find(u => u._id === (isNaN(unitId) ? unitId : Number(unitId)));
+      if (record) { record.unit_code = newCode; persistState(record._id); }
+      const id  = Date.now() + '_' + Math.random().toString(36).slice(2);
+      const req = { id, unit_id: String(unitId), field_key: 'unit_code', old_value: curCode, new_value: newCode,
+                    requested_by: _currentUser?.username || '', status: 'approved', created_at: new Date().toISOString() };
+      _reversalCache.unshift(req);
+      const { error } = await _sb.from('reversal_requests').insert(req);
+      if (error) console.error('Unit code change failed to record:', error);
+    } else {
+      const username = _currentUser?.username || '';
+      await submitReversalRequest(unitId, 'unit_code', curCode, newCode, username);
+    }
+  } catch (e) {
+    console.error('submitCodeChangeRequest error:', e);
+    alert('Something went wrong saving the unit code change. Please try again.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = btnLabel; }
     closeCodeChangeModal();
     renderEntryForm();
   }
-  if (btn) { btn.disabled = false; }
 }
 
 function renderAddForm() {
@@ -5874,7 +5885,7 @@ async function submitReversalRequest(unitId, fieldKey, oldValue, newValue, reque
   return true;
 }
 
-function approveReversal(reqId) {
+async function approveReversal(reqId) {
   if (!APP_CONFIG.can('approve_reversals')) return;
   const req = _reversalCache.find(r => r.id === reqId);
   if (!req) return;
@@ -5882,21 +5893,24 @@ function approveReversal(reqId) {
   const record = DB.find(u => u._id === numId);
   if (record) { record[req.field_key] = req.new_value; persistState(numId); }
   req.status = 'approved';
-  _sb.from('reversal_requests').update({ status: 'approved' }).eq('id', reqId).catch(console.error);
+  // Re-render first so the UI updates regardless of the network call result.
   renderNotifPanelBody(); renderNotificationBell();
   renderUnitList();
   if (numId === selectedId) renderEntryForm();
+  const { error } = await _sb.from('reversal_requests').update({ status: 'approved' }).eq('id', reqId);
+  if (error) console.error('Approve reversal failed to persist:', error);
 }
 
-function denyReversal(reqId) {
+async function denyReversal(reqId) {
   if (!APP_CONFIG.can('approve_reversals')) return;
   const req = _reversalCache.find(r => r.id === reqId);
   if (!req) return;
   req.status = 'denied';
-  _sb.from('reversal_requests').update({ status: 'denied' }).eq('id', reqId).catch(console.error);
   renderNotifPanelBody(); renderNotificationBell();
   renderUnitList();
   if (!isNaN(req.unit_id) ? Number(req.unit_id) === selectedId : req.unit_id === selectedId) renderEntryForm();
+  const { error } = await _sb.from('reversal_requests').update({ status: 'denied' }).eq('id', reqId);
+  if (error) console.error('Deny reversal failed to persist:', error);
 }
 
 // ============================================================
