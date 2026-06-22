@@ -409,6 +409,9 @@ nav {
 .section-docs-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.9px; margin-bottom: 10px; }
 .doc-slot { margin-bottom: 12px; }
 .doc-slot:last-child { margin-bottom: 0; }
+.doc-with-field { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.doc-with-field > .doc-slot { flex: 1 1 240px; margin-bottom: 0; }
+.doc-with-field > .form-group { flex: 0 0 200px; }
 .doc-slot-label { font-size: 12px; color: var(--text); font-weight: 500; margin-bottom: 5px; }
 .doc-upload-area {
   display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
@@ -1978,6 +1981,12 @@ canvas { width:100% !important; }
               <button class="filter-pill" data-val="not_endorsed" onclick="setEndorsedFilter('not_endorsed')">Not Endorsed</button>
             </div>
           </div>
+          <div class="filter-menu-section">
+            <div class="filter-menu-label">Financial Institution</div>
+            <select id="fi-filter-select" class="filter-select" style="width:100%" onchange="setFiFilter(this.value)">
+              <option value="">All Financial Institutions</option>
+            </select>
+          </div>
         </div>
       </div>
       <button class="add-unit-btn" onclick="renderAddForm()">+ Add New Unit</button>
@@ -2149,6 +2158,7 @@ async function _initAppData() {
   }).subscribe();
 
   filteredUnits = [...DB];
+  populateEntryFiFilter();
   renderDashboard();
   renderUnitList();
   updateNavTabs();
@@ -3215,13 +3225,21 @@ function toggleEcarItem(unitId, itemKey, checked) {
 
 // ── Section footer: doc upload area + per-section Save button ─
 
-function sectionFooter(unitId, sectionId) {
+function sectionFooter(unitId, sectionId, r) {
   const sec = FORM_SECTIONS.find(s => s.id === sectionId);
   if (!sec) return '';
+  let docsInner = sec.docs.map(dt => docSlotHtml(unitId, dt)).join('');
+  // Unit Info: render DOAS Notarial Date beside the DOAS upload slot
+  if (sectionId === 'unit_info' && r) {
+    docsInner = `<div class="doc-with-field">
+      ${docsInner}
+      ${field('doas_notarial_date','DOAS Notarial Date',r,'date')}
+    </div>`;
+  }
   const docsHtml = (APP_CONFIG.features.documentUploads && sec.docs.length)
     ? `<div class="section-docs">
          <div class="section-docs-title">Documentary Proof</div>
-         ${sec.docs.map(dt => docSlotHtml(unitId, dt)).join('')}
+         ${docsInner}
        </div>` : '';
   const saveHtml = (APP_CONFIG.features.stageSave && APP_CONFIG.can('write'))
     ? `<div class="section-save-row">
@@ -3314,6 +3332,7 @@ let activeStatusTab      = 'all';
 let activeCardFilter     = null; // set by openCardFilter() from Summary view
 let activeStageFilter    = null; // null = all, 0/1/2/3 = specific stage
 let activeEndorsedFilter = null; // null = all, 'endorsed', 'not_endorsed'
+let activeFiFilter       = '';   // '' = all, '__cash__' = Cash/none, else FI name
 
 function toggleFilterMenu(e) {
   if (e) e.stopPropagation();
@@ -3337,6 +3356,31 @@ function setEndorsedFilter(val) {
   _updateFilterBtn();
   filterUnits();
 }
+function setFiFilter(val) {
+  activeFiFilter = val || '';
+  _updateFilterBtn();
+  filterUnits();
+}
+// Populate the entry-view FI filter dropdown from the FI options + any values present in the data.
+function populateEntryFiFilter() {
+  const sel = document.getElementById('fi-filter-select');
+  if (!sel) return;
+  const prev = activeFiFilter;
+  const present = [...new Set(
+    DB.filter(r => r.financial_institution && r.financial_institution.trim())
+      .map(r => r.financial_institution.trim())
+  )];
+  const opts = [...new Set([...getFiOptions(), ...present])]
+    .filter(o => o && o.toLowerCase() !== 'cash')
+    .sort();
+  const hasCash = DB.some(r => !r.financial_institution || !r.financial_institution.trim() ||
+                               r.financial_institution.trim().toLowerCase() === 'cash');
+  sel.innerHTML = '<option value="">All Financial Institutions</option>' +
+    (hasCash ? '<option value="__cash__">Cash / None</option>' : '') +
+    opts.map(o => `<option value="${o}">${o}</option>`).join('');
+  sel.value = prev;
+  if (sel.value !== prev) { activeFiFilter = ''; }
+}
 function _syncFilterPills(groupId, activeVal) {
   const group = document.getElementById(groupId);
   if (!group) return;
@@ -3349,7 +3393,8 @@ function _syncFilterPills(groupId, activeVal) {
 function _updateFilterBtn() {
   const count = (activeStatusTab !== 'all' ? 1 : 0) +
                 (activeStageFilter !== null ? 1 : 0) +
-                (activeEndorsedFilter !== null ? 1 : 0);
+                (activeEndorsedFilter !== null ? 1 : 0) +
+                (activeFiFilter ? 1 : 0);
   const badge = document.getElementById('filter-count-badge');
   const btn   = document.getElementById('filter-menu-btn');
   if (badge) { badge.textContent = count; badge.style.display = count > 0 ? 'inline' : 'none'; }
@@ -3380,6 +3425,8 @@ function filterUnits() {
   if (activeStageFilter !== null)                     base = base.filter(r => getStage(r) === activeStageFilter);
   if (activeEndorsedFilter === 'endorsed')            base = base.filter(r => !!r.sp_endorsed_date);
   if (activeEndorsedFilter === 'not_endorsed')        base = base.filter(r => !r.sp_endorsed_date);
+  if (activeFiFilter === '__cash__')                  base = base.filter(r => !r.financial_institution || !r.financial_institution.trim() || r.financial_institution.trim().toLowerCase() === 'cash');
+  else if (activeFiFilter)                            base = base.filter(r => (r.financial_institution || '').trim() === activeFiFilter);
   filteredUnits = q
     ? base.filter(r => (r.unit_code||'').toLowerCase().includes(q) || (r.present_buyer||'').toLowerCase().includes(q) || (r.floor||'').toString().includes(q))
     : base;
@@ -3635,12 +3682,11 @@ function renderEntryForm() {
           ${financialInstitutionField(r)}
           ${field('date_loan_credited','Date of Full Payment',r,'date')}
           ${pesoField('total_contract_price','Total Contract Price',r)}
-          ${field('doas_notarial_date','DOAS Notarial Date',r,'date')}
           ${field('cct_under_developer','CCT No. under Developer',r,'text')}
           ${field('tax_dec_under_developer','Tax Dec No. under Developer',r,'text')}
           ${textfield('bank_remarks','Bank Remarks / Mode of Payment',r)}
         </div>
-        ${sectionFooter(r._id, 'unit_info')}
+        ${sectionFooter(r._id, 'unit_info', r)}
       </div>
 
       <!-- BIR PAYMENT -->
